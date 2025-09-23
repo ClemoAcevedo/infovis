@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Visualización que muestra cómo los fallecidos por COVID-19 en Chile disminuyen a medida que aumenta la cobertura de vacunación entre 2020 y 2023.">
+    <title>COVID-19 en Chile: Fallecidos vs. Vacunación (2020–2023)</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">COVID-19 en Chile: Fallecidos vs. Vacunación (2020–2023)</h1>
+        <p class="subtitle">Las muertes disminuyeron en paralelo con la implementación de la campaña masiva de vacunación (promedio 7 días).</p>
+
+        <div class="chart-container" id="chart-container">
+            <svg id="chart-root"
+                 role="img"
+                 aria-label="Gráfico de líneas que muestra cómo los fallecidos por COVID-19 en Chile disminuyen a medida que aumenta el porcentaje de vacunados entre 2020 y 2023."
+                 tabindex="0">
+            </svg>
+        </div>
+
+
+        <p class="caption">
+            Este gráfico muestra la evolución temporal de los fallecidos por COVID-19 (línea roja, promedio móvil de 7 días) y el porcentaje de población vacunada (línea azul) en Chile desde 2020 hasta 2023. Las muertes disminuyeron en paralelo con la implementación de la campaña masiva de vacunación.
+        </p>
+    </div>
+
+    <!-- Scripts -->
+    <script src="assets/vendor/d3.v7.min.js"></script>
+    <script type="module" src="assets/js/chart.js"></script>
+    <script type="module">
+        import { initChart } from './assets/js/chart.js';
+
+        // Initialize chart when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            initChart();
+        });
+    </script>
+</body>
+</html>

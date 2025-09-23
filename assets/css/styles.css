@@ -1,0 +1,271 @@
+/**
+ * Styles for COVID-19 Chile visualization
+ */
+
+/* Reset and base styles */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background-color: white;
+  color: #333;
+  line-height: 1.4;
+}
+
+/* Container */
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+/* Typography (refined) */
+.title {
+  font-size: 22px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  text-align: center;
+  color: #444;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: #777;
+  margin-bottom: 32px;
+  text-align: center;
+  font-weight: 300;
+}
+
+.source {
+  font-size: 10px;
+  color: #888;
+  text-align: center;
+  margin-top: 16px;
+  font-weight: 300;
+}
+
+.caption {
+  font-size: 12px;
+  color: #777;
+  text-align: center;
+  margin-top: 12px;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.5;
+  font-weight: 300;
+}
+
+/* Chart container */
+.chart-container {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+#chart-root {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Chart elements */
+.axis .domain {
+  stroke: #555;
+  stroke-width: 1;
+}
+
+.axis .tick line {
+  stroke: #555;
+  stroke-width: 1;
+}
+
+.axis .tick text {
+  fill: #666;
+  font-size: 10px;
+  font-family: inherit;
+  font-weight: 300;
+}
+
+/* Lines */
+.line {
+  fill: none;
+}
+
+.line--deaths {
+  stroke: #D43F3A;
+}
+
+.line--vaccination {
+  stroke: #2C7FB8;
+}
+
+/* Milestones */
+.milestone {
+  opacity: 0.8;
+}
+
+.milestone--primary {
+  stroke: #555;
+}
+
+.milestone--secondary {
+  stroke: #777;
+}
+
+.milestone--tertiary {
+  stroke: #999;
+}
+
+.milestone-text {
+  font-size: 10px;
+  fill: #777;
+  text-anchor: middle;
+  font-weight: 300;
+  font-family: inherit;
+}
+
+/* Legend styles */
+.legend-text {
+  font-size: 11px;
+  font-weight: 300;
+  font-family: inherit;
+}
+
+.direct-label--deaths {
+  fill: #D43F3A;
+}
+
+.direct-label--vaccination {
+  fill: #2C7FB8;
+}
+
+/* Annotations */
+.annotation-arrow {
+  stroke: #666;
+  stroke-width: 1;
+}
+
+.annotation-text {
+  font-size: 11px;
+  fill: #666;
+  font-weight: 500;
+  font-family: inherit;
+}
+
+/* Error message */
+.error-message {
+  color: #d32f2f;
+  text-align: center;
+  font-size: 14px;
+  padding: 20px;
+  border: 1px solid #ffcdd2;
+  background-color: #ffebee;
+  border-radius: 4px;
+  margin: 20px 0;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  body {
+    padding: 12px;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .subtitle {
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  .caption {
+    font-size: 12px;
+  }
+
+  .source {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .title {
+    font-size: 18px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+  }
+
+  .axis .tick text {
+    font-size: 10px;
+  }
+
+  .direct-label {
+    font-size: 11px;
+  }
+
+  .milestone-text {
+    font-size: 10px;
+  }
+
+  .annotation-text {
+    font-size: 10px;
+  }
+
+  .caption {
+    font-size: 11px;
+  }
+}
+
+/* Accessibility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus styles for accessibility */
+.chart-container:focus {
+  outline: 2px solid #2C7FB8;
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .line--deaths {
+    stroke-width: 3;
+  }
+
+  .line--vaccination {
+    stroke-width: 3;
+  }
+
+  .milestone {
+    stroke-width: 2;
+  }
+
+  .axis .domain,
+  .axis .tick line {
+    stroke: #000;
+    stroke-width: 2;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
