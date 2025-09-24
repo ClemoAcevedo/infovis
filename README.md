@@ -32,9 +32,7 @@ Los datos utilizados provienen de los siguientes productos oficiales del Ministe
    - Período: Enero 2021 - Agosto 2023
 
 ### Enlaces Oficiales
-- Ministerio de Ciencia: https://github.com/MinCiencia/Datos-COVID19
-- DEIS MinSal: https://informesdeis.minsal.cl/SASVisualAnalytics/
-- Organización Panamericana de la Salud (OPS/OMS)
+- OBSERVA: https://observa.minciencia.gob.cl/datos-abiertos/datos-del-repositorio-covid-19
 
 ## 🔄 Metodología de Procesamiento
 
