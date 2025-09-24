@@ -109,48 +109,4 @@ factual_updates = {
 └── index.html                  # Página principal
 ```
 
-## 🛠️ Tecnologías Utilizadas
-
-- **D3.js v7**: Visualización de datos
-- **HTML5/CSS3**: Estructura y presentación
-- **JavaScript ES6+**: Lógica de interacción
-- **Python 3**: Scripts de procesamiento de datos
-
-## 📱 Características Técnicas
-
-### Diseño Responsivo
-- Adaptación automática a dispositivos móviles
-- Escalado dinámico de elementos gráficos
-- Optimización para pantallas pequeñas
-
-### Accesibilidad
-- Soporte para lectores de pantalla
-- Navegación por teclado
-- Alto contraste disponible
-- Reducción de movimiento para usuarios sensibles
-
-### Rendimiento
-- Sin scrolling horizontal ni vertical
-- Ajuste perfecto al viewport
-- Carga optimizada de datos
-
-## 🎯 Hitos Importantes Visualizados
-
-La visualización incluye líneas de referencia para eventos clave:
-- **24 dic 2020**: Inicio vacunación (personal sanitario)
-- **3 feb 2021**: Campaña masiva (85+ años)
-- **Pico Ómicron**: Anotación del período de mayor contagio
-
-## 📖 Interpretación de Resultados
-
-### Correlación Observada
-1. **Período pre-vacunación (2020)**: Fluctuaciones altas en fallecidos
-2. **Inicio de vacunación (ene 2021)**: Mantenimiento de niveles altos
-3. **Cobertura creciente (feb-ago 2021)**: Descenso sostenido de fallecidos
-4. **Alta cobertura (sep 2021+)**: Estabilización en niveles bajos
-
-### Limitaciones del Análisis
-- Correlación no implica causalidad directa
-- Otros factores influyeron: medidas sanitarias, variantes virales, inmunidad natural
-- Diferentes períodos de incubación y reportes pueden afectar la sincronización
 
