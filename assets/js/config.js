@@ -62,27 +62,27 @@ export const LINE_STYLES = {
 export const MILESTONES = [
   {
     date: '2021-02-03',
-    label: 'Inicio de vacunación',
+    label: ['Inicio', 'Vacunación'],
     style: 'primary',
     strokeWidth: 1,
     dashArray: '2,3',
-    yOffset: -30
+    yOffset: -40
   },
   {
     date: '2021-08-11',
-    label: 'Inicio de refuerzo',
+    label: ['Inicio', 'Refuerzo'],
     style: 'secondary',
     strokeWidth: 1,
     dashArray: '2,3',
-    yOffset: -45
+    yOffset: -40
   },
   {
     date: '2022-01-15',
-    label: 'Ola Ómicron',
+    label: ['Ola', 'Ómicron'],
     style: 'tertiary',
     strokeWidth: 1,
     dashArray: '2,3',
-    yOffset: -30
+    yOffset: -40
   }
 ];
 
@@ -101,7 +101,14 @@ export const CONTENT = {
     text2: 'a vacunación',
     date: '2021-10-01'
   },
-  caption: 'Este gráfico muestra la evolución temporal de los fallecidos por COVID-19 (línea roja, promedio móvil de 7 días) y el porcentaje de población vacunada (línea azul) en Chile desde 2020 hasta 2023. Se observa una clara disminución de las muertes tras el inicio de la campaña masiva de vacunación.'
+  omicronAnnotation: {
+    text: ['Ola Ómicron causó un alza', 'repentina de fallecidos'],
+    date: '2022-03-01'
+  },
+  vaccinationJumpAnnotation: {
+    text: 'Inicio campaña masiva',
+    date: '2021-02-03'
+  },
 };
 
 // Responsive breakpoints

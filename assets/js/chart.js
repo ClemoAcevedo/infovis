@@ -53,17 +53,17 @@ export function drawAxes(svg, scales, config) {
   const { xScale, yLeftScale, yRightScale } = scales;
   const mobile = isMobile(BREAKPOINTS.mobile);
 
-  // X-axis
+  // X-axis - force Spanish formatting
   const xAxis = d3.axisBottom(xScale)
-    .tickFormat(formatAxisDate)
-    .ticks(getTickCount(mobile));
+    .ticks(getTickCount(mobile))
+    .tickFormat(formatAxisDate);
 
   // Y-axes
   const yLeftAxis = d3.axisLeft(yLeftScale)
-    .ticks(6);
+    .ticks(5);
 
   const yRightAxis = d3.axisRight(yRightScale)
-    .ticks(5)
+    .ticks(4)
     .tickFormat(formatPercentage)
     .tickPadding(8); // Add padding to avoid crowding
 
@@ -99,18 +99,20 @@ export function drawAxes(svg, scales, config) {
 
   // Color-code axis ticks and labels
   yLeftAxisGroup.selectAll('.tick text')
-    .style('fill', COLORS.deaths);
+    .style('fill', COLORS.deaths)
+    .style('opacity', 0.7);
 
   yLeftAxisGroup.selectAll('.tick line')
     .style('stroke', COLORS.deaths)
     .style('opacity', 0.6);
 
   yRightAxisGroup.selectAll('.tick text')
-    .style('fill', COLORS.vaccination);
+    .style('fill', COLORS.vaccination)
+    .style('opacity', 0.7);
 
   yRightAxisGroup.selectAll('.tick line')
     .style('stroke', COLORS.vaccination)
-    .style('opacity', 0.6);
+    .style('opacity', 0.4);
 }
 
 /**
@@ -202,22 +204,38 @@ export function addMilestones(svg, scales, config) {
         .attr('class', 'milestone-label')
         .attr('transform', `translate(${x}, ${milestone.yOffset})`);
 
-      labelGroup.append('text')
-        .attr('class', 'milestone-text')
-        .attr('x', 0)
-        .attr('y', 0)
-        .attr('text-anchor', 'middle')
-        .style('font-size', '10px')
-        .style('fill', '#888')
-        .style('font-weight', '400')
-        .text(milestone.label);
+      // Handle multi-line labels
+      if (Array.isArray(milestone.label)) {
+        milestone.label.forEach((line, index) => {
+          labelGroup.append('text')
+            .attr('class', 'milestone-text')
+            .attr('x', 0)
+            .attr('y', index * 12)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '11px')
+            .style('fill', '#666')
+            .style('font-weight', '500')
+            .text(line);
+        });
+      } else {
+        labelGroup.append('text')
+          .attr('class', 'milestone-text')
+          .attr('x', 0)
+          .attr('y', 0)
+          .attr('text-anchor', 'middle')
+          .style('font-size', '11px')
+          .style('fill', '#666')
+          .style('font-weight', '500')
+          .text(milestone.label);
+      }
 
-      // Add downward arrow
+      // Add downward arrow - adjust position for multi-line labels
+      const arrowYStart = Array.isArray(milestone.label) ? milestone.label.length * 12 + 3 : 8;
       labelGroup.append('line')
         .attr('x1', 0)
-        .attr('y1', 5)
+        .attr('y1', arrowYStart)
         .attr('x2', 0)
-        .attr('y2', 15)
+        .attr('y2', arrowYStart + 10)
         .attr('stroke', '#666')
         .attr('stroke-width', 1)
         .attr('marker-end', 'url(#milestone-arrow)');
@@ -240,21 +258,16 @@ export function addMilestones(svg, scales, config) {
 }
 
 /**
- * Adds direct labels outside the chart area for cleaner appearance
+ * Adds direct labels on the lines for cleaner appearance
  * @param {Object} svg - D3 SVG selection
  * @param {Array} data - Chart data
  * @param {Object} scales - Chart scales
  * @param {Object} config - Chart configuration
  */
 export function addDirectLabels(svg, data, scales, config) {
-  const { width, height } = config;
+  const { width, height, xScale, yLeftScale, yRightScale } = { ...config, ...scales };
 
   if (data.length === 0) return;
-
-  // Add legend outside chart area
-  const legendGroup = svg.append('g')
-    .attr('class', 'legend')
-    .attr('transform', `translate(${width - 160}, -35)`);
 
   // Add source footnote below chart
   svg.append('text')
@@ -263,99 +276,117 @@ export function addDirectLabels(svg, data, scales, config) {
     .attr('y', height + 35)
     .style('font-size', '10px')
     .style('fill', '#777')
-    .text('Fuente: MinCiencia y MINSAL — DP37, DP77, DP10. Cobertura máxima alcanzada: ~90% de la población.');
+    .text('Fuente: MinCiencia y MINSAL — DP37, DP77, DP10.');
 
-  // Deaths legend item
-  legendGroup.append('line')
-    .attr('x1', 0)
-    .attr('x2', 20)
-    .attr('y1', 0)
-    .attr('y2', 0)
-    .attr('stroke', COLORS.deaths)
-    .attr('stroke-width', LINE_STYLES.deaths.strokeWidth);
+  // Position labels at the end of the chart for better clarity
+  const lastDataPoint = data[data.length - 1];
 
-  legendGroup.append('text')
-    .attr('x', 25)
-    .attr('y', 4)
-    .attr('fill', COLORS.deaths)
-    .attr('class', 'legend-text')
-    .style('font-size', '12px')
-    .style('font-weight', '400')
-    .text(CONTENT.labels.deaths);
+  if (lastDataPoint) {
+    const labelX = width - 5; // Position at the right edge
 
-  // Vaccination legend item
-  legendGroup.append('line')
-    .attr('x1', 0)
-    .attr('x2', 20)
-    .attr('y1', 15)
-    .attr('y2', 15)
-    .attr('stroke', COLORS.vaccination)
-    .attr('stroke-width', LINE_STYLES.vaccination.strokeWidth);
+    // Deaths line label - position above the line
+    const deathsY = yLeftScale(lastDataPoint.deaths_7d);
+    const deathsLabelGroup = svg.append('g').attr('class', 'direct-label deaths-label');
 
-  legendGroup.append('text')
-    .attr('x', 25)
-    .attr('y', 19)
-    .attr('fill', COLORS.vaccination)
-    .attr('class', 'legend-text')
-    .style('font-size', '12px')
-    .style('font-weight', '400')
-    .text(CONTENT.labels.vaccination);
+    deathsLabelGroup.append('text')
+      .attr('x', labelX)
+      .attr('y', deathsY - 35) // Position much higher above the line
+      .attr('fill', COLORS.deaths)
+      .attr('text-anchor', 'end')
+      .style('font-size', '12px')
+      .style('font-weight', '500')
+      .text(CONTENT.labels.deaths);
+
+    // Vaccination line label - position below the line
+    const vaccinationY = yRightScale(lastDataPoint.vaccinated_pct);
+    const vaccinationLabelGroup = svg.append('g').attr('class', 'direct-label vaccination-label');
+
+    vaccinationLabelGroup.append('text')
+      .attr('x', labelX)
+      .attr('y', vaccinationY + 15) // Position below the line
+      .attr('fill', COLORS.vaccination)
+      .attr('text-anchor', 'end')
+      .style('font-size', '12px')
+      .style('font-weight', '500')
+      .text(CONTENT.labels.vaccination);
+  }
+
+  // Simplified approach - let the right Y-axis handle percentage reference points
+  // This avoids clutter while maintaining readability
 }
 
 /**
  * Adds narrative annotation with arrow
  * @param {Object} svg - D3 SVG selection
+ * @param {Array} data - Chart data
  * @param {Object} scales - Chart scales
  * @param {Object} config - Chart configuration
  */
-export function addAnnotations(svg, scales, config) {
-  const { xScale } = scales;
+export function addAnnotations(svg, data, scales, config) {
+  const { xScale, yLeftScale } = scales;
   const { height } = config;
 
   // Add arrow marker definition
-  svg.append('defs').append('marker')
-    .attr('id', 'arrowhead')
-    .attr('markerWidth', 6)
-    .attr('markerHeight', 4)
-    .attr('refX', 5)
-    .attr('refY', 2)
-    .attr('orient', 'auto')
-    .append('polygon')
-    .attr('points', '0 0, 6 2, 0 4')
-    .attr('fill', '#666');
+  if (svg.select('#arrowhead').empty()) {
+    svg.select('defs').append('marker')
+      .attr('id', 'arrowhead')
+      .attr('markerWidth', 6)
+      .attr('markerHeight', 4)
+      .attr('refX', 5)
+      .attr('refY', 2)
+      .attr('orient', 'auto')
+      .append('polygon')
+      .attr('points', '0 0, 6 2, 0 4')
+      .attr('fill', '#666');
+  }
 
-  // Position annotation
-  const annotationDate = d3.timeParse('%Y-%m-%d')(CONTENT.annotation.date);
-  const annotationX = xScale(annotationDate);
-  const annotationY = height * 0.7;
+  // Add Omicron annotation - less visible and properly positioned
+  const omicronDate = d3.timeParse('%Y-%m-%d')(CONTENT.omicronAnnotation.date);
+  const omicronX = xScale(omicronDate);
 
-  // Arrow (shortened and repositioned)
-  svg.append('line')
-    .attr('class', 'annotation-arrow')
-    .attr('x1', annotationX - 50)
-    .attr('y1', annotationY + 10)
-    .attr('x2', annotationX - 15)
-    .attr('y2', annotationY - 25)
-    .attr('stroke', '#666')
+  // Find the actual deaths value at the peak to position annotation correctly
+  const omicronData = data.find(d => d3.timeFormat('%Y-%m-%d')(d.date) === CONTENT.omicronAnnotation.date);
+  const omicronDeathsY = omicronData ? yLeftScale(omicronData.deaths_7d) : height * 0.3;
+  const omicronY = omicronDeathsY - 3; // Position text closer to the peak for better arrow connection
+
+  const omicronGroup = svg.append('g')
+    .attr('class', 'omicron-annotation')
+    .attr('opacity', 0.6); // Make less visible
+
+  // Handle multi-line text
+  if (Array.isArray(CONTENT.omicronAnnotation.text)) {
+    CONTENT.omicronAnnotation.text.forEach((line, index) => {
+      omicronGroup.append('text')
+        .attr('x', omicronX + 35) // Move more to the right
+        .attr('y', omicronY + (index * 12))
+        .attr('fill', '#888')
+        .attr('font-size', '10px')
+        .attr('font-weight', '400')
+        .attr('text-anchor', 'start')
+        .text(line);
+    });
+  } else {
+    omicronGroup.append('text')
+      .attr('x', omicronX + 35) // Move more to the right
+      .attr('y', omicronY)
+      .attr('fill', '#888')
+      .attr('font-size', '10px')
+      .attr('font-weight', '400')
+      .attr('text-anchor', 'start')
+      .text(CONTENT.omicronAnnotation.text);
+  }
+
+  // Horizontal arrow pointing directly to the peak and touching it
+  const arrowY = omicronDeathsY; // Keep arrow at the same level as the peak
+  omicronGroup.append('line')
+    .attr('x1', omicronX + 35) // Start from the beginning of the text
+    .attr('y1', arrowY)
+    .attr('x2', omicronX) // End exactly at the peak x-coordinate
+    .attr('y2', arrowY) // Same y-coordinate for horizontal arrow
+    .attr('stroke', '#888')
     .attr('stroke-width', 1)
     .attr('marker-end', 'url(#arrowhead)');
 
-  // Annotation text
-  svg.append('text')
-    .attr('class', 'annotation-text')
-    .attr('x', annotationX - 75)
-    .attr('y', annotationY + 15)
-    .attr('fill', '#666')
-    .attr('text-anchor', 'middle')
-    .text(CONTENT.annotation.text1);
-
-  svg.append('text')
-    .attr('class', 'annotation-text')
-    .attr('x', annotationX - 75)
-    .attr('y', annotationY + 27)
-    .attr('fill', '#666')
-    .attr('text-anchor', 'middle')
-    .text(CONTENT.annotation.text2);
 }
 
 /**
@@ -386,6 +417,7 @@ export function makeResponsive() {
       drawLines(chartGroup, chartData, scales, config);
       addMilestones(chartGroup, scales, config);
       addDirectLabels(chartGroup, chartData, scales, config);
+      addAnnotations(chartGroup, chartData, scales, config);
       }
   }, 250);
 
@@ -397,8 +429,19 @@ export function makeResponsive() {
  */
 export async function initChart() {
   try {
+    // Set Spanish locale for D3
+    d3.timeFormatDefaultLocale({
+      "dateTime": "%A, %e de %B de %Y, %X",
+      "date": "%d/%m/%Y",
+      "time": "%H:%M:%S",
+      "periods": ["AM", "PM"],
+      "days": ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"],
+      "shortDays": ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"],
+      "months": ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+      "shortMonths": ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    });
     // Load data
-    const rawData = await d3.csv('assets/data.csv');
+    const rawData = await d3.csv('assets/data_factual.csv');
 
     // Process data
     chartData = rawData
@@ -441,6 +484,7 @@ export async function initChart() {
     drawLines(chartGroup, chartData, scales, config);
     addMilestones(chartGroup, scales, config);
     addDirectLabels(chartGroup, chartData, scales, config);
+    addAnnotations(chartGroup, chartData, scales, config);
 
     // Setup responsiveness
     makeResponsive();

@@ -5,7 +5,13 @@
       "Bash(python3:*)",
       "Bash(awk:*)",
       "Bash(mkdir:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(sort:*)",
+      "Bash(claude doctor)",
+      "Bash(claude --version)",
+      "Bash(npm:*)",
+      "Bash(git --version)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

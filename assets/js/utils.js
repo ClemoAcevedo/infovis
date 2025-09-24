@@ -8,7 +8,11 @@
  * @returns {string} Formatted date string
  */
 export function formatAxisDate(date) {
-  return d3.timeFormat('%b %Y')(date);
+  const monthsES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+                    'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const month = monthsES[date.getMonth()];
+  const year = date.getFullYear();
+  return `${month} ${year}`;
 }
 
 /**
