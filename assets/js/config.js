@@ -75,14 +75,6 @@ export const MILESTONES = [
     strokeWidth: 1,
     dashArray: '2,3',
     yOffset: -40
-  },
-  {
-    date: '2022-01-15',
-    label: ['Ola', 'Ómicron'],
-    style: 'tertiary',
-    strokeWidth: 1,
-    dashArray: '2,3',
-    yOffset: -40
   }
 ];
 
@@ -102,12 +94,16 @@ export const CONTENT = {
     date: '2021-10-01'
   },
   omicronAnnotation: {
-    text: ['Ola Ómicron causó un alza', 'repentina de fallecidos'],
+    text: ['La nueva cepa Ómicron,', 'altamente contagiosa y' , 'con múltiples mutaciones'],
     date: '2022-03-01'
   },
   vaccinationJumpAnnotation: {
     text: 'Inicio campaña masiva',
     date: '2021-02-03'
+  },
+  firstAnnotation: {
+    text: ['Salto inicial de cobertura:', 'primeras dosis a grupos', 'prioritarios y carga histórica',],
+    date: '2020-12-25'
   },
 };
 
@@ -121,3 +117,48 @@ export const ANIMATION = {
   duration: 750,
   easing: 'ease-in-out'
 };
+
+export const COMMENTS = [
+  {
+    id: 'yellow',
+    // Centro del recuadro amarillo (zona baja a fines 2020–inicios 2021)
+    date: '2020-07-15',      // mueve esta fecha si necesitas desplazar en X
+    yType: 'left',           // usa eje izquierdo (fallecidos)
+    yValue: 24,              // mueve este valor si necesitas subir/bajar el texto
+    anchor: 'start',         // start | middle | end
+    dx: 0,                   // ajuste fino en X (px)
+    dy: 0,                   // ajuste fino en Y (px)
+    text: [
+      'Cuarentena total',
+      'generalizada'
+    ]
+  },
+  {
+    id: 'blue',
+    // Centro del recuadro azul (meses medios de 2021, rebrote)
+    date: '2021-03-15', // se usa el centro del rango
+    yType: 'left',
+    yValue: 135,
+    anchor: 'middle',
+    dx: 0,
+    dy: -10,
+    text: [
+      'Baja vacunación', 
+      'y cepa Gamma'
+    ]
+  },
+  {
+    id: 'violet',
+    // Centro del recuadro violeta (fines 2021, pre-Ómicron)
+    date: '2021-11-10',
+    yType: 'left',
+    yValue: 90,
+    anchor: 'middle',
+    dx: 0,
+    dy: 6,
+    text: [
+      '40–60% con 1 dosis', 
+      'e inmunidad natural'
+    ]
+  }
+];

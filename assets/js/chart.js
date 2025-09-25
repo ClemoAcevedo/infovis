@@ -2,7 +2,7 @@
  * Main chart module for COVID-19 Chile visualization
  */
 
-import { CHART_CONFIG, COLORS, LINE_STYLES, MILESTONES, CONTENT, BREAKPOINTS } from './config.js';
+import { CHART_CONFIG, COLORS, LINE_STYLES, MILESTONES, CONTENT, BREAKPOINTS, COMMENTS } from './config.js';
 import {
   formatAxisDate,
   formatPercentage,
@@ -276,7 +276,7 @@ export function addDirectLabels(svg, data, scales, config) {
     .attr('y', height + 35)
     .style('font-size', '10px')
     .style('fill', '#777')
-    .text('Fuente: MinCiencia y MINSAL — DP37, DP77, DP10.');
+    .text('Fuente: MinCiencia y MINSAL.');
 
   // Position labels at the end of the chart for better clarity
   const lastDataPoint = data[data.length - 1];
@@ -303,7 +303,7 @@ export function addDirectLabels(svg, data, scales, config) {
 
     vaccinationLabelGroup.append('text')
       .attr('x', labelX)
-      .attr('y', vaccinationY + 15) // Position below the line
+      .attr('y', vaccinationY - 5) // Position below the line
       .attr('fill', COLORS.vaccination)
       .attr('text-anchor', 'end')
       .style('font-size', '12px')
@@ -323,7 +323,7 @@ export function addDirectLabels(svg, data, scales, config) {
  * @param {Object} config - Chart configuration
  */
 export function addAnnotations(svg, data, scales, config) {
-  const { xScale, yLeftScale } = scales;
+  const { xScale, yLeftScale, yRightScale } = scales;
   const { height } = config;
 
   // Add arrow marker definition
@@ -386,7 +386,41 @@ export function addAnnotations(svg, data, scales, config) {
     .attr('stroke', '#888')
     .attr('stroke-width', 1)
     .attr('marker-end', 'url(#arrowhead)');
+  
+  const parse = d3.timeParse('%Y-%m-%d');
 
+  COMMENTS.forEach(c => {
+    // X => fecha única o centro del rango
+    let x;
+    if (c.date) {
+      x = xScale(parse(c.date));
+    } else if (c.dateRange && c.dateRange.length === 2) {
+      const x1 = xScale(parse(c.dateRange[0]));
+      const x2 = xScale(parse(c.dateRange[1]));
+      x = (x1 + x2) / 2;
+    }
+
+    // Y => en eje izquierdo (fallecidos) o derecho (% vacunados)
+    const yScale = c.yType === 'right' ? yRightScale : yLeftScale;
+    const y = yScale(c.yValue);
+
+    const g = svg.append('g').attr('class', `comment comment--${c.id}`);
+
+    const lines = Array.isArray(c.text) ? c.text : [c.text];
+    const xText = x + (c.dx || 0);
+    const yText = y + (c.dy || 0);
+
+    lines.forEach((line, i) => {
+      g.append('text')
+        .attr('x', xText)
+        .attr('y', yText + i * 12)
+        .attr('text-anchor', c.anchor || 'start')
+        .attr('font-size', '9px')
+        .attr('fill', '#888')
+        .attr('opacity', 0.7)
+        .text(line);
+    });
+  });
 }
 
 /**
