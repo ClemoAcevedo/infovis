@@ -31,9 +31,8 @@ export function buildScales(data, config) {
     .range([0, width]);
 
   const yLeftScale = d3.scaleLinear()
-    .domain([0, d3.max(data, d => d.deaths_7d)])
-    .range([height, 0])
-    .nice();
+    .domain([0, 250])
+    .range([height, 0]);
 
   const yRightScale = d3.scaleLinear()
     .domain([0, 100])
@@ -58,9 +57,9 @@ export function drawAxes(svg, scales, config) {
     .ticks(getTickCount(mobile))
     .tickFormat(formatAxisDate);
 
-  // Y-axes
+  // Y-axes - set fixed tick values
   const yLeftAxis = d3.axisLeft(yLeftScale)
-    .ticks(5);
+    .tickValues([50, 100, 150, 200, 250]);
 
   const yRightAxis = d3.axisRight(yRightScale)
     .ticks(4)
@@ -187,17 +186,33 @@ export function addMilestones(svg, scales, config) {
     const x = xScale(milestoneDate);
 
     if (x >= 0 && x <= width) {
-      // Add milestone line
-      svg.append('line')
-        .attr('class', `milestone milestone--${milestone.style}`)
-        .attr('x1', x)
-        .attr('x2', x)
-        .attr('y1', 0)
-        .attr('y2', height)
-        .attr('stroke', COLORS.milestone[milestone.style])
-        .attr('stroke-width', milestone.strokeWidth)
-        .attr('stroke-dasharray', milestone.dashArray)
-        .attr('stroke-opacity', 0.4);
+      // Create gradient effect with multiple dotted line segments
+      const segments = 20; // Number of segments to create gradient effect
+      const segmentHeight = height / segments;
+      const dashPattern = milestone.dashArray.split(',').map(d => +d);
+      const dashLength = dashPattern[0];
+      const gapLength = dashPattern[1];
+      const totalDashUnit = dashLength + gapLength;
+
+      for (let i = 0; i < segments; i++) {
+        const y1 = i * segmentHeight;
+        const y2 = (i + 1) * segmentHeight;
+        const opacity = 0.4 * (1 - i / segments); // Fade from 0.4 to 0
+
+        if (opacity > 0.02) { // Only draw visible segments
+          svg.append('line')
+            .attr('class', `milestone milestone--${milestone.style}`)
+            .attr('x1', x)
+            .attr('x2', x)
+            .attr('y1', y1)
+            .attr('y2', y2)
+            .attr('stroke', COLORS.milestone[milestone.style])
+            .attr('stroke-width', milestone.strokeWidth)
+            .attr('stroke-dasharray', milestone.dashArray)
+            .attr('stroke-opacity', opacity)
+            .attr('stroke-dashoffset', -(y1 % totalDashUnit)); // Align dashes
+        }
+      }
 
       // Add milestone label with arrow pointing down
       const labelGroup = svg.append('g')
@@ -282,20 +297,19 @@ export function addDirectLabels(svg, data, scales, config) {
   const lastDataPoint = data[data.length - 1];
 
   if (lastDataPoint) {
-    const labelX = width - 5; // Position at the right edge
-
-    // Deaths line label - position above the line
-    const deathsY = yLeftScale(lastDataPoint.deaths_7d);
+    // Deaths line label - position in top left corner
     const deathsLabelGroup = svg.append('g').attr('class', 'direct-label deaths-label');
 
     deathsLabelGroup.append('text')
-      .attr('x', labelX)
-      .attr('y', deathsY - 35) // Position much higher above the line
+      .attr('x', 5) // Position at the left edge with small padding
+      .attr('y', 15) // Position at the top with small padding
       .attr('fill', COLORS.deaths)
-      .attr('text-anchor', 'end')
+      .attr('text-anchor', 'start')
       .style('font-size', '12px')
       .style('font-weight', '500')
       .text(CONTENT.labels.deaths);
+
+    const labelX = width - 5; // Position at the right edge
 
     // Vaccination line label - position below the line
     const vaccinationY = yRightScale(lastDataPoint.vaccinated_pct);

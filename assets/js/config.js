@@ -85,7 +85,7 @@ export const CONTENT = {
   source: 'Fuente: MinCiencia y MINSAL — DP37, DP77 (DP10 opcional).',
   ariaLabel: 'Gráfico de líneas que muestra cómo los fallecidos por COVID-19 en Chile disminuyen a medida que aumenta el porcentaje de vacunados entre 2020 y 2023.',
   labels: {
-    deaths: 'Fallecidos (promedio 7 días)',
+    deaths: 'Fallecidos (a 7 días)',
     vaccination: '% Vacunados'
   },
   annotation: {
