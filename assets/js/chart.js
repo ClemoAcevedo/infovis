@@ -59,7 +59,7 @@ export function drawAxes(svg, scales, config) {
 
   // Y-axes - set fixed tick values
   const yLeftAxis = d3.axisLeft(yLeftScale)
-    .tickValues([50, 100, 150, 200, 250]);
+    .tickValues([0, 50, 100, 150, 200, 250]);
 
   const yRightAxis = d3.axisRight(yRightScale)
     .ticks(4)
