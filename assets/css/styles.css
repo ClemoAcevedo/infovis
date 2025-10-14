@@ -31,6 +31,131 @@ body {
   box-sizing: border-box;
 }
 
+/* Filters container */
+.filters-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px;
+}
+
+.filter-label {
+  font-size: 13px;
+  color: #666;
+  font-weight: 500;
+}
+
+.filter-checkboxes {
+  display: flex;
+  gap: 20px;
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #2C7FB8;
+}
+
+.checkbox-label {
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.vaccination-label {
+  color: #2C7FB8;
+}
+
+.deaths-label {
+  color: #D43F3A;
+}
+
+.filter-checkbox input[type="checkbox"]:not(:checked) + .checkbox-label {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+/* No data message */
+.no-data-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  color: #888;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 12px 20px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Tooltip styles */
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  min-width: 180px;
+  transition: opacity 0.2s;
+}
+
+.tooltip-date {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #eee;
+  font-size: 13px;
+}
+
+.tooltip-deaths {
+  color: #D43F3A;
+  font-weight: 500;
+  margin: 4px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tooltip-vaccination {
+  color: #2C7FB8;
+  font-weight: 500;
+  margin: 4px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tooltip-deaths::before {
+  content: "●";
+  margin-right: 4px;
+}
+
+.tooltip-vaccination::before {
+  content: "●";
+  margin-right: 4px;
+}
+
 /* Typography (refined) */
 .title {
   font-size: 22px;
@@ -223,6 +348,24 @@ body {
   .source {
     font-size: 10px;
   }
+
+  .filters-container {
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .filter-checkboxes {
+    gap: 15px;
+  }
+
+  .filter-label {
+    font-size: 12px;
+  }
+
+  .checkbox-label {
+    font-size: 12px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -301,5 +444,195 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Zoom & Pan controls */
+.zoom-controls {
+  position: absolute;
+  top: 80px;
+  right: 30px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.zoom-helper {
+  font-size: 11px;
+  color: #888;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 6px 10px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  user-select: none;
+}
+
+.reset-zoom-btn {
+  font-size: 12px;
+  padding: 6px 12px;
+  background: #2C7FB8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: background 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.reset-zoom-btn:hover {
+  background: #1e5a8a;
+}
+
+.reset-zoom-btn:active {
+  transform: translateY(1px);
+}
+
+.reset-zoom-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Cursor styles for pan */
+.chart-container.grabbable {
+  cursor: grab;
+}
+
+.chart-container.grabbing {
+  cursor: grabbing;
+}
+
+/* Responsive zoom controls */
+@media (max-width: 768px) {
+  .zoom-controls {
+    top: 60px;
+    right: 15px;
+  }
+
+  .zoom-helper {
+    font-size: 10px;
+    padding: 5px 8px;
+  }
+
+  .reset-zoom-btn {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .zoom-controls {
+    top: 50px;
+    right: 10px;
+  }
+}
+
+/* ===== CONTROLES DE SONIFICACIÓN ===== */
+.sound-controls {
+  position: absolute;
+  bottom: 30px;
+  right: 30px;
+  z-index: 100;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.sound-play-btn,
+.sound-mute-btn {
+  font-size: 12px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  white-space: nowrap;
+}
+
+.sound-play-btn:hover,
+.sound-mute-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.sound-play-btn:active,
+.sound-mute-btn:active {
+  transform: translateY(0);
+}
+
+.sound-play-btn.playing {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.sound-mute-btn {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  padding: 8px 12px;
+}
+
+.sound-mute-btn.muted {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(245, 87, 108, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 16px rgba(245, 87, 108, 0.6);
+  }
+}
+
+/* Indicador de progreso de sonificación */
+.sound-progress {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom,
+    rgba(102, 126, 234, 0.8) 0%,
+    rgba(102, 126, 234, 0.4) 50%,
+    rgba(102, 126, 234, 0) 100%);
+  pointer-events: none;
+  z-index: 50;
+  transition: left 0.1s linear;
+}
+
+/* Responsive sound controls */
+@media (max-width: 768px) {
+  .sound-controls {
+    bottom: 20px;
+    right: 15px;
+    gap: 8px;
+  }
+
+  .sound-play-btn,
+  .sound-mute-btn {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sound-controls {
+    bottom: 15px;
+    right: 10px;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .sound-play-btn,
+  .sound-mute-btn {
+    font-size: 10px;
+    padding: 5px 8px;
   }
 }

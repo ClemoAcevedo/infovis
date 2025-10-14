@@ -12,12 +12,47 @@
         <h1 class="title">COVID-19 en Chile: Fallecidos vs. Vacunados (2020–2023)</h1>
         <p class="subtitle">Las muertes disminuyeron en paralelo con la implementación de la campaña masiva de vacunación (promedio 7 días).</p>
 
+        <div class="filters-container">
+            <div class="filter-label">Mostrar series:</div>
+            <div class="filter-checkboxes">
+                <label class="filter-checkbox">
+                    <input type="checkbox" id="filter-vaccination" checked>
+                    <span class="checkbox-label vaccination-label">Vacunación</span>
+                </label>
+                <label class="filter-checkbox">
+                    <input type="checkbox" id="filter-deaths" checked>
+                    <span class="checkbox-label deaths-label">Fallecidos</span>
+                </label>
+            </div>
+        </div>
+
         <div class="chart-container" id="chart-container">
             <svg id="chart-root"
                  role="img"
                  aria-label="Gráfico de líneas que muestra cómo los fallecidos por COVID-19 en Chile disminuyen a medida que aumenta el porcentaje de vacunados entre 2020 y 2023."
                  tabindex="0">
             </svg>
+            <div class="zoom-controls">
+                <div class="zoom-helper">🔍 Arrastra o usa la rueda para explorar</div>
+                <button class="reset-zoom-btn" id="reset-zoom-btn">Resetear vista</button>
+            </div>
+            <div class="sound-controls">
+                <button class="sound-play-btn" id="sound-play-btn" title="Reproducir sonificación de datos">
+                    ▶️ Reproducir Sonificación
+                </button>
+                <button class="sound-mute-btn" id="sound-mute-btn" title="Silenciar audio">
+                    🔇 Silenciar
+                </button>
+            </div>
+            <div class="sound-progress" id="sound-progress" style="display: none;"></div>
+            <div class="no-data-message" id="no-data-message" style="display: none;">
+                Seleccione al menos una serie para visualizar datos
+            </div>
+            <div class="tooltip" id="chart-tooltip" style="display: none;">
+                <div class="tooltip-date"></div>
+                <div class="tooltip-deaths"></div>
+                <div class="tooltip-vaccination"></div>
+            </div>
         </div>
 
 
@@ -25,7 +60,9 @@
 
     <!-- Scripts -->
     <script src="assets/vendor/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
     <script type="module" src="assets/js/chart.js"></script>
+    <script type="module" src="assets/js/sound.js"></script>
     <script type="module">
         import { initChart } from './assets/js/chart.js';
 

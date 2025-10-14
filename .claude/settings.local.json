@@ -11,7 +11,10 @@
       "Bash(claude --version)",
       "Bash(npm:*)",
       "Bash(git --version)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(pkill:*)"
     ],
     "deny": [],
     "ask": []
