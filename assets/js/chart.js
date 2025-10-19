@@ -218,6 +218,14 @@ export function addMilestones(svg, scales, config) {
     const x = xScale(milestoneDate);
 
     if (x >= 0 && x <= width) {
+      const labelText = Array.isArray(milestone.label) ? milestone.label.join(' ') : milestone.label;
+      const milestoneGroup = milestonesGroup.append('g')
+        .attr('class', `milestone-context contextual-element milestone-context--${milestone.style}`)
+        .attr('data-context-date', milestone.date)
+        .attr('data-context-type', 'milestone')
+        .attr('data-context-label', labelText || '')
+        .attr('transform', `translate(${x},0)`);
+
       // Create gradient effect with multiple dotted line segments
       const segments = 20; // Number of segments to create gradient effect
       const segmentHeight = height / segments;
@@ -232,10 +240,10 @@ export function addMilestones(svg, scales, config) {
         const opacity = 0.4 * (1 - i / segments); // Fade from 0.4 to 0
 
         if (opacity > 0.02) { // Only draw visible segments
-          milestonesGroup.append('line')
+          milestoneGroup.append('line')
             .attr('class', `milestone milestone--${milestone.style}`)
-            .attr('x1', x)
-            .attr('x2', x)
+            .attr('x1', 0)
+            .attr('x2', 0)
             .attr('y1', y1)
             .attr('y2', y2)
             .attr('stroke', COLORS.milestone[milestone.style])
@@ -247,9 +255,9 @@ export function addMilestones(svg, scales, config) {
       }
 
       // Add milestone label with arrow pointing down
-      const labelGroup = milestonesGroup.append('g')
+      const labelGroup = milestoneGroup.append('g')
         .attr('class', 'milestone-label')
-        .attr('transform', `translate(${x}, ${milestone.yOffset})`);
+        .attr('transform', `translate(0, ${milestone.yOffset})`);
 
       // Handle multi-line labels
       if (Array.isArray(milestone.label)) {
@@ -401,7 +409,10 @@ export function addAnnotations(svg, data, scales, config) {
   const omicronY = omicronDeathsY - 3; // Position text closer to the peak for better arrow connection
 
   const omicronGroup = annotationsGroup.append('g')
-    .attr('class', 'omicron-annotation')
+    .attr('class', 'omicron-annotation contextual-element')
+    .attr('data-context-date', CONTENT.omicronAnnotation.date)
+    .attr('data-context-type', 'annotation')
+    .attr('data-context-label', Array.isArray(CONTENT.omicronAnnotation.text) ? CONTENT.omicronAnnotation.text.join(' ') : CONTENT.omicronAnnotation.text || '')
     .attr('opacity', 0.6); // Make less visible
 
   // Handle multi-line text
@@ -455,9 +466,15 @@ export function addAnnotations(svg, data, scales, config) {
     const yScale = c.yType === 'right' ? yRightScale : yLeftScale;
     const y = yScale(c.yValue);
 
-    const g = annotationsGroup.append('g').attr('class', `comment comment--${c.id}`);
-
+    const commentDate = c.date || (Array.isArray(c.dateRange) && c.dateRange.length > 0 ? c.dateRange[Math.floor(c.dateRange.length / 2)] : null);
     const lines = Array.isArray(c.text) ? c.text : [c.text];
+    const contextLabel = lines.join(' ');
+
+    const g = annotationsGroup.append('g')
+      .attr('class', `comment comment--${c.id} contextual-element`)
+      .attr('data-context-date', commentDate || '')
+      .attr('data-context-type', 'comment')
+      .attr('data-context-label', contextLabel);
     const xText = x + (c.dx || 0);
     const yText = y + (c.dy || 0);
 
@@ -928,6 +945,14 @@ function zoomed(event, config) {
     const x = newXScale(milestoneDate);
 
     if (x >= 0 && x <= config.width) {
+      const labelText = Array.isArray(milestone.label) ? milestone.label.join(' ') : milestone.label;
+      const milestoneGroup = milestonesGroup.append('g')
+        .attr('class', `milestone-context contextual-element milestone-context--${milestone.style}`)
+        .attr('data-context-date', milestone.date)
+        .attr('data-context-type', 'milestone')
+        .attr('data-context-label', labelText || '')
+        .attr('transform', `translate(${x},0)`);
+
       // Redibujar líneas de hitos
       const segments = 20;
       const segmentHeight = config.height / segments;
@@ -940,10 +965,10 @@ function zoomed(event, config) {
         const opacity = 0.4 * (1 - i / segments);
 
         if (opacity > 0.02) {
-          milestonesGroup.append('line')
+          milestoneGroup.append('line')
             .attr('class', `milestone milestone--${milestone.style}`)
-            .attr('x1', x)
-            .attr('x2', x)
+            .attr('x1', 0)
+            .attr('x2', 0)
             .attr('y1', y1)
             .attr('y2', y2)
             .attr('stroke', COLORS.milestone[milestone.style])
@@ -955,9 +980,9 @@ function zoomed(event, config) {
       }
 
       // Redibujar etiquetas de hitos
-      const labelGroup = milestonesGroup.append('g')
+      const labelGroup = milestoneGroup.append('g')
         .attr('class', 'milestone-label')
-        .attr('transform', `translate(${x}, ${milestone.yOffset})`);
+        .attr('transform', `translate(0, ${milestone.yOffset})`);
 
       if (Array.isArray(milestone.label)) {
         milestone.label.forEach((line, index) => {
@@ -1013,7 +1038,10 @@ function zoomed(event, config) {
     const omicronY = omicronDeathsY - 3;
 
     const omicronGroup = annotationsGroup.append('g')
-      .attr('class', 'omicron-annotation')
+      .attr('class', 'omicron-annotation contextual-element')
+      .attr('data-context-date', CONTENT.omicronAnnotation.date)
+      .attr('data-context-type', 'annotation')
+      .attr('data-context-label', Array.isArray(CONTENT.omicronAnnotation.text) ? CONTENT.omicronAnnotation.text.join(' ') : CONTENT.omicronAnnotation.text || '')
       .attr('opacity', 0.6);
 
     if (Array.isArray(CONTENT.omicronAnnotation.text)) {
@@ -1055,9 +1083,16 @@ function zoomed(event, config) {
       const yScale = c.yType === 'right' ? scales.yRightScale : scales.yLeftScale;
       const y = yScale(c.yValue);
 
-      const g = annotationsGroup.append('g').attr('class', `comment comment--${c.id}`);
-
       const lines = Array.isArray(c.text) ? c.text : [c.text];
+      const commentDate = c.date || (Array.isArray(c.dateRange) && c.dateRange.length > 0 ? c.dateRange[Math.floor(c.dateRange.length / 2)] : null);
+      const contextLabel = lines.join(' ');
+
+      const g = annotationsGroup.append('g')
+        .attr('class', `comment comment--${c.id} contextual-element`)
+        .attr('data-context-date', commentDate || '')
+        .attr('data-context-type', 'comment')
+        .attr('data-context-label', contextLabel);
+
       const xText = x + (c.dx || 0);
       const yText = y + (c.dy || 0);
 

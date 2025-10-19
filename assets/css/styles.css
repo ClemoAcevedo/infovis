@@ -201,6 +201,7 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 0;
+  position: relative;
 }
 
 #chart-root {
@@ -237,8 +238,25 @@ body {
   stroke: #D43F3A;
 }
 
+.line--deaths.sonification-dimmed {
+  stroke: rgba(212, 63, 58, 0.12) !important;
+  opacity: 0.08 !important;
+  stroke-width: 1.2px !important;
+}
+
 .line--vaccination {
   stroke: #2C7FB8;
+}
+
+.contextual-element {
+  opacity: 1;
+  transition: opacity 0.35s ease;
+  will-change: opacity;
+}
+
+.contextual-element.contextual-hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Milestones */
@@ -607,6 +625,43 @@ body {
   transition: left 0.1s linear;
 }
 
+.sound-deaths-marker {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(214, 39, 40, 0.95) 0%, rgba(214, 39, 40, 0.6) 55%, rgba(214, 39, 40, 0) 75%);
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px rgba(214, 39, 40, 0.4);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.9);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+  z-index: 60;
+}
+
+
+.sonification-highlight {
+  stroke: rgba(255, 70, 70, 0.95);
+  stroke-width: 3px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-opacity: 1;
+  filter: drop-shadow(0 0 6px rgba(255, 82, 82, 0.7));
+  animation: sonificationGlow 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sonificationGlow {
+  0%, 100% {
+    stroke-opacity: 0.8;
+    filter: drop-shadow(0 0 5px rgba(255, 82, 82, 0.6));
+  }
+  50% {
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 12px rgba(255, 82, 82, 0.95));
+  }
+}
 /* Responsive sound controls */
 @media (max-width: 768px) {
   .sound-controls {

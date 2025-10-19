@@ -10,6 +10,7 @@ let isAudioInitialized = false;
 let isMuted = false;
 let isPlaying = false;
 let playbackInterval = null;
+let playbackStartDate = null;
 
 // ===== ESCALAS DE MAPEO DE DATOS A SONIDO =====
 let escalaMuertes = null;      // Escala: fallecidos → frecuencia (beep de ECG)
@@ -24,6 +25,255 @@ let chartData = null;
 let filterState = null;
 let scales = null;
 let chartGroup = null;
+let deathsMarker = null;
+let chartContainerElement = null;
+let deathsHighlightPath = null;
+let originalDeathsStroke = null;
+let originalDeathsStrokeWidth = null;
+let originalDeathsStrokeOpacity = null;
+let originalDeathsStyleOpacity = null;
+let contextElements = [];
+let lastPlaybackDate = null;
+let contextDateParser = null;
+
+function ensureChartContainer() {
+  if (!chartContainerElement) {
+    chartContainerElement = document.getElementById('chart-container');
+  }
+  return chartContainerElement;
+}
+
+function ensureHighlightPath() {
+  if (!chartGroup || typeof chartGroup.select !== 'function') {
+    return null;
+  }
+
+  if (deathsHighlightPath && typeof deathsHighlightPath.empty === 'function' && deathsHighlightPath.empty()) {
+    deathsHighlightPath = null;
+  }
+
+  if (!deathsHighlightPath) {
+    const linesGroup = chartGroup.select('.lines-group');
+    const target = linesGroup && typeof linesGroup.empty === 'function' && !linesGroup.empty() ? linesGroup : chartGroup;
+
+    deathsHighlightPath = target.append('path')
+      .attr('class', 'sonification-highlight')
+      .attr('fill', 'none')
+      .attr('stroke', '#ff5f5f')
+      .attr('stroke-width', 3)
+      .attr('stroke-linecap', 'round')
+      .attr('stroke-linejoin', 'round')
+      .style('opacity', 0)
+      .style('pointer-events', 'none');
+  }
+
+  return deathsHighlightPath;
+}
+
+function hideHighlightPath() {
+  if (deathsHighlightPath && typeof deathsHighlightPath.style === 'function') {
+    deathsHighlightPath
+      .style('opacity', 0)
+      .attr('d', null);
+  }
+}
+
+function ensureDeathsMarker() {
+  const container = ensureChartContainer();
+  if (container && !deathsMarker) {
+    deathsMarker = document.createElement('div');
+    deathsMarker.className = 'sound-deaths-marker';
+    deathsMarker.style.opacity = '0';
+    deathsMarker.style.transform = 'translate(-50%, -50%) scale(0.9)';
+    container.appendChild(deathsMarker);
+  }
+  return deathsMarker;
+}
+
+function hideDeathsMarker() {
+  if (deathsMarker) {
+    deathsMarker.style.opacity = '0';
+    deathsMarker.style.transform = 'translate(-50%, -50%) scale(0.9)';
+  }
+  hideHighlightPath();
+}
+
+function getContextDateParser() {
+  if (!contextDateParser && typeof d3 !== 'undefined' && typeof d3.timeParse === 'function') {
+    contextDateParser = d3.timeParse('%Y-%m-%d');
+  }
+  return contextDateParser;
+}
+
+function parseContextDateString(dateString) {
+  if (!dateString) {
+    return null;
+  }
+  const parser = getContextDateParser();
+  if (!parser) {
+    return null;
+  }
+  const parsed = parser(dateString.trim());
+  return parsed instanceof Date && !Number.isNaN(parsed.getTime()) ? parsed : null;
+}
+
+function refreshContextElements() {
+  if (!chartGroup || typeof chartGroup.selectAll !== 'function') {
+    contextElements = [];
+    return;
+  }
+
+  const nodes = chartGroup.selectAll('.contextual-element').nodes();
+  contextElements = nodes.map(node => {
+    const dateAttr = node.getAttribute('data-context-date') || '';
+    const labelAttr = node.getAttribute('data-context-label') || '';
+    const parsedDate = parseContextDateString(dateAttr);
+    return {
+      element: node,
+      date: parsedDate,
+      label: labelAttr,
+      revealed: !(parsedDate instanceof Date) || !isPlaying
+    };
+  });
+
+  contextElements.sort((a, b) => {
+    if (a.date && b.date) {
+      return a.date - b.date;
+    }
+    if (a.date) return -1;
+    if (b.date) return 1;
+    return 0;
+  });
+
+  if (isPlaying) {
+    contextElements.forEach(item => {
+      if (item.date instanceof Date) {
+        item.revealed = false;
+        item.element.classList.add('contextual-hidden');
+      } else {
+        item.revealed = true;
+        item.element.classList.remove('contextual-hidden');
+      }
+    });
+
+    if (lastPlaybackDate) {
+      revealContextElementsUpToDate(lastPlaybackDate, true);
+    }
+  } else {
+    contextElements.forEach(item => {
+      item.revealed = true;
+      item.element.classList.remove('contextual-hidden');
+    });
+  }
+
+  console.log(`🧭 Contextos registrados: ${contextElements.length}`);
+}
+
+function resetContextElementsForPlayback() {
+  if (!contextElements.length) {
+    refreshContextElements();
+  }
+
+  contextElements.forEach(item => {
+    if (item.date instanceof Date) {
+      item.revealed = false;
+      item.element.classList.add('contextual-hidden');
+    } else {
+      item.revealed = true;
+      item.element.classList.remove('contextual-hidden');
+    }
+  });
+}
+
+function revealContextElementsUpToDate(targetDate, silent = false) {
+  if (!(targetDate instanceof Date) || Number.isNaN(targetDate.getTime())) {
+    return;
+  }
+
+  contextElements.forEach(item => {
+    if (!item.date || item.revealed) {
+      return;
+    }
+
+    if (item.date <= targetDate) {
+      item.revealed = true;
+      item.element.classList.remove('contextual-hidden');
+
+      if (!silent) {
+        const label = item.label || item.element?.getAttribute('class') || 'contexto';
+        console.log(`📝 Contexto activado: ${label}`);
+      }
+    }
+  });
+}
+
+function restoreContextElementsVisibility() {
+  contextElements.forEach(item => {
+    if (item.element) {
+      item.element.classList.remove('contextual-hidden');
+    }
+    item.revealed = true;
+  });
+}
+
+function setDeathsLineDimmed(isDimmed) {
+  if (!chartGroup || typeof chartGroup.select !== 'function') {
+    console.warn('setDeathsLineDimmed: chartGroup no disponible');
+    return;
+  }
+
+  const deathsLine = chartGroup.select('.line--deaths');
+  if (deathsLine.empty()) {
+    console.warn('setDeathsLineDimmed: no se encontró la línea de fallecidos');
+    return;
+  }
+
+  if (originalDeathsStroke === null) {
+    originalDeathsStroke = deathsLine.attr('stroke') || '#D43F3A';
+  }
+  if (originalDeathsStrokeWidth === null) {
+    const widthAttr = deathsLine.attr('stroke-width');
+    originalDeathsStrokeWidth = widthAttr ? parseFloat(widthAttr) : 3;
+    if (!Number.isFinite(originalDeathsStrokeWidth)) {
+      originalDeathsStrokeWidth = 3;
+    }
+  }
+  if (originalDeathsStrokeOpacity === null) {
+    const opacityAttr = deathsLine.attr('stroke-opacity');
+    originalDeathsStrokeOpacity = opacityAttr ? parseFloat(opacityAttr) : 1;
+    if (!Number.isFinite(originalDeathsStrokeOpacity)) {
+      originalDeathsStrokeOpacity = 1;
+    }
+  }
+  if (originalDeathsStyleOpacity === null) {
+    const styleOpacity = deathsLine.style('opacity');
+    originalDeathsStyleOpacity = styleOpacity !== undefined && styleOpacity !== null && styleOpacity !== ''
+      ? parseFloat(styleOpacity)
+      : null;
+    if (originalDeathsStyleOpacity !== null && !Number.isFinite(originalDeathsStyleOpacity)) {
+      originalDeathsStyleOpacity = null;
+    }
+  }
+
+  deathsLine.classed('sonification-dimmed', !!isDimmed);
+
+  if (isDimmed) {
+    const dimmedWidth = Math.max(1, originalDeathsStrokeWidth * 0.5);
+    deathsLine
+      .attr('stroke', 'rgba(212, 63, 58, 0.1)')
+      .attr('stroke-width', dimmedWidth)
+      .attr('stroke-opacity', 0.12)
+      .style('opacity', 0.06);
+    console.log('🔻 Línea de fallecidos atenuada durante sonificación');
+  } else {
+    deathsLine
+      .attr('stroke', originalDeathsStroke)
+      .attr('stroke-width', originalDeathsStrokeWidth)
+      .attr('stroke-opacity', originalDeathsStrokeOpacity)
+      .style('opacity', originalDeathsStyleOpacity !== null ? originalDeathsStyleOpacity : null);
+    console.log('🔺 Línea de fallecidos restaurada tras sonificación');
+  }
+}
 
 /**
  * Inicializa el contexto de audio y los sintetizadores
@@ -160,6 +410,18 @@ async function reproducirSonificacion() {
     return;
   }
 
+  playbackStartDate = datosVisibles[0]?.date || null;
+
+  ensureChartContainer();
+  ensureHighlightPath();
+  ensureDeathsMarker();
+  hideHighlightPath();
+  hideDeathsMarker();
+  refreshContextElements();
+  resetContextElementsForPlayback();
+  lastPlaybackDate = null;
+  setDeathsLineDimmed(true);
+
   console.log('▶️ Reproduciendo sonificación de datos...');
   isPlaying = true;
 
@@ -187,6 +449,11 @@ async function reproducirSonificacion() {
 
     const punto = datosVisibles[indice];
 
+    revealContextElementsUpToDate(punto.date);
+    if (punto.date instanceof Date && !Number.isNaN(punto.date.getTime())) {
+      lastPlaybackDate = punto.date;
+    }
+
     // Reproducir sonido del punto actual
     reproducirPunto(punto, 0.12);
 
@@ -211,6 +478,12 @@ function detenerReproduccion() {
   }
 
   isPlaying = false;
+  playbackStartDate = null;
+  setDeathsLineDimmed(false);
+  hideHighlightPath();
+  hideDeathsMarker();
+  restoreContextElementsVisibility();
+  lastPlaybackDate = null;
 
   // Restaurar botón
   if (playButton) {
@@ -235,29 +508,95 @@ function actualizarIndicadorProgreso(punto) {
     return;
   }
 
+  const container = ensureChartContainer();
+  const chartElement = chartGroup.node ? chartGroup.node() : null;
+  ensureHighlightPath();
+  ensureDeathsMarker();
+
+  if (!container || !chartElement || typeof chartElement.getBoundingClientRect !== 'function') {
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const svgElement = chartElement.ownerSVGElement;
+  const ctm = typeof chartElement.getScreenCTM === 'function' ? chartElement.getScreenCTM() : null;
+
+  if (!svgElement || !ctm) {
+    return;
+  }
+
+  const projectPoint = (x, y) => {
+    const point = svgElement.createSVGPoint();
+    point.x = x;
+    point.y = y;
+    const transformed = point.matrixTransform(ctm);
+    return {
+      left: transformed.x - containerRect.left,
+      top: transformed.y - containerRect.top
+    };
+  };
+
+  const xRange = scales.xScale.range();
+  const xSpan = xRange[1] - xRange[0];
+  if (!isFinite(xSpan) || xSpan === 0) {
+    return;
+  }
+
   const xPos = scales.xScale(punto.date);
+  if (!isFinite(xPos)) {
+    return;
+  }
 
-  // Posicionar línea vertical de progreso
-  // El SVG tiene viewBox y preserveAspectRatio, necesitamos calcular posición real
-  const svg = document.getElementById('chart-root');
-  const svgRect = svg.getBoundingClientRect();
-  const containerRect = document.getElementById('chart-container').getBoundingClientRect();
+  const clampedX = Math.min(Math.max(xPos, xRange[0]), xRange[1]);
+  const projectedTop = projectPoint(clampedX, 0);
+  const projectedBottom = projectPoint(clampedX, scales.yLeftScale.range()[0]);
+  const indicatorLeft = projectedTop.left;
+  const indicatorTop = Math.min(projectedTop.top, projectedBottom.top);
+  const indicatorHeight = Math.abs(projectedBottom.top - projectedTop.top);
 
-  // Calcular escala del SVG (puede ser diferente por aspect ratio)
-  const scaleX = svgRect.width / 720; // 720 es el width del CHART_CONFIG
-
-  // Posición considerando margen izquierdo (56px) y escala
-  const margenIzquierdo = 56 * scaleX;
-  const posicionReal = (xPos * scaleX) + margenIzquierdo + (svgRect.left - containerRect.left);
-
-  progressIndicator.style.left = `${posicionReal}px`;
-
-  // También ajustar top y height para que coincida con el área del gráfico
-  const margenSuperior = 56 * (svgRect.height / 400); // 400 es el height del CHART_CONFIG
-  progressIndicator.style.top = `${margenSuperior}px`;
-  progressIndicator.style.height = `${svgRect.height - margenSuperior - (65 * (svgRect.height / 400))}px`;
-
+  progressIndicator.style.left = `${indicatorLeft}px`;
+  progressIndicator.style.top = `${indicatorTop}px`;
+  progressIndicator.style.height = `${indicatorHeight}px`;
   progressIndicator.style.display = 'block';
+
+  const highlightPath = ensureHighlightPath();
+  if (highlightPath && chartData) {
+    const minDate = playbackStartDate instanceof Date ? playbackStartDate : null;
+    const highlightData = chartData.filter(d =>
+      d.date instanceof Date &&
+      d.date <= punto.date &&
+      (!minDate || d.date >= minDate) &&
+      d.deaths_7d != null &&
+      isFinite(d.deaths_7d)
+    );
+
+    if (highlightData.length >= 2) {
+      const highlightLine = d3.line()
+        .x(d => scales.xScale(d.date))
+        .y(d => scales.yLeftScale(d.deaths_7d))
+        .curve(d3.curveMonotoneX)
+        .defined(d => d.date && !isNaN(d.deaths_7d) && isFinite(d.deaths_7d));
+
+      highlightPath
+        .attr('d', highlightLine(highlightData))
+        .style('opacity', 1);
+    } else {
+      hideHighlightPath();
+    }
+  }
+
+  if (deathsMarker) {
+    if (punto.deaths_7d != null && isFinite(punto.deaths_7d)) {
+      const yPos = scales.yLeftScale(punto.deaths_7d);
+      const markerPoint = projectPoint(clampedX, yPos);
+      deathsMarker.style.left = `${markerPoint.left}px`;
+      deathsMarker.style.top = `${markerPoint.top}px`;
+      deathsMarker.style.opacity = '1';
+      deathsMarker.style.transform = 'translate(-50%, -50%) scale(1)';
+    } else {
+      hideDeathsMarker();
+    }
+  }
 }
 
 /**
@@ -305,6 +644,13 @@ export function cleanupSound() {
   if (isPlaying) {
     detenerReproduccion();
   }
+
+  hideHighlightPath();
+  hideDeathsMarker();
+  restoreContextElementsVisibility();
+  lastPlaybackDate = null;
+  setDeathsLineDimmed(false);
+
   console.log('🧹 Limpieza de sonificación completada');
 }
 
@@ -323,6 +669,11 @@ export function initSound(data, filters, chartScales, svg) {
   filterState = filters;
   scales = chartScales;
   chartGroup = svg;
+
+  chartContainerElement = document.getElementById('chart-container');
+  ensureHighlightPath();
+  ensureDeathsMarker();
+  refreshContextElements();
 
   // Configurar escalas de sonido
   configurarEscalas(data);
@@ -359,6 +710,16 @@ export function initSound(data, filters, chartScales, svg) {
 export function updateSoundReferences(chartScales, filters) {
   scales = chartScales;
   filterState = filters;
+
+  ensureChartContainer();
+  ensureHighlightPath();
+  ensureDeathsMarker();
+  refreshContextElements();
+  setDeathsLineDimmed(isPlaying);
+
+  if (!isPlaying) {
+    hideDeathsMarker();
+  }
 
   console.log('🔄 Referencias de sonificación actualizadas');
 }
