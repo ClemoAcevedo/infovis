@@ -49,6 +49,9 @@ let filterState = {
   '>=90': false
 };
 
+// Helper to know if any age filter is active
+const hasActiveAgeFilters = () => AGE_GROUPS.some(group => filterState[group]);
+
 // ===== ESTADO GLOBAL DEL TOOLTIP =====
 let tooltipElements = {
   tooltip: null,        // Elemento HTML del tooltip
@@ -431,31 +434,7 @@ export function addMilestones(svg, scales, config) {
           .attr('fill', '#666');
       }
 
-      // Add arrow at the bottom of the vertical line
-      if (svg.select('#milestone-arrow-bottom').empty()) {
-        svg.select('defs').append('marker')
-          .attr('id', 'milestone-arrow-bottom')
-          .attr('markerWidth', 8)
-          .attr('markerHeight', 8)
-          .attr('refX', 4)
-          .attr('refY', 4)
-          .attr('orient', 'auto')
-          .append('polygon')
-          .attr('points', '0 0, 8 4, 0 8')
-          .attr('fill', COLORS.milestone[milestone.style])
-          .attr('opacity', 0.6);
-      }
-
-      // Add a line with arrow at the bottom
-      lineGroup.append('line')
-        .attr('x1', 0)
-        .attr('y1', height - 15)
-        .attr('x2', 0)
-        .attr('y2', height)
-        .attr('stroke', COLORS.milestone[milestone.style])
-        .attr('stroke-width', 1.5)
-        .attr('stroke-opacity', 0.6)
-        .attr('marker-end', 'url(#milestone-arrow-bottom)');
+      // Ya no se dibuja flecha inferior para mantener el foco en las etiquetas superiores
     }
   });
 }
@@ -677,7 +656,9 @@ export function makeResponsive() {
       drawLines(chartGroup, chartData, scales, config);
       addMilestones(chartGroup, scales, config);
       addDirectLabels(chartGroup, chartData, scales, config);
-      addAnnotations(chartGroup, chartData, scales, config);
+      if (!hasActiveAgeFilters()) {
+        addAnnotations(chartGroup, chartData, scales, config);
+      }
 
       // Reinicializar zoom después de resize
       setupZoom(svg, config);
@@ -799,7 +780,9 @@ function redrawChart() {
   drawLines(chartGroup, chartData, scales, config);
   addMilestones(chartGroup, scales, config);
   addDirectLabels(chartGroup, chartData, scales, config);
-  addAnnotations(chartGroup, chartData, scales, config);
+  if (!hasActiveAgeFilters()) {
+    addAnnotations(chartGroup, chartData, scales, config);
+  }
 
   // Restaurar zoom
   setupZoom(svg, config);
@@ -1275,107 +1258,100 @@ function zoomed(event, config) {
         .attr('stroke-width', 1)
         .attr('marker-end', 'url(#milestone-arrow)');
 
-      // Add arrow at the bottom of the vertical line
-      lineGroup.append('line')
-        .attr('x1', 0)
-        .attr('y1', config.height - 15)
-        .attr('x2', 0)
-        .attr('y2', config.height)
-        .attr('stroke', COLORS.milestone[milestone.style])
-        .attr('stroke-width', 1.5)
-        .attr('stroke-opacity', 0.6)
-        .attr('marker-end', 'url(#milestone-arrow-bottom)');
-    }
-  });
+	      // Flecha inferior eliminada; los hitos quedan destacados solo en la parte superior
+	    }
+	  });
 
   // ===== ACTUALIZACIÓN DE ANOTACIONES =====
   chartGroup.selectAll('.annotations-group').remove();
 
-  // Recrear grupo de anotaciones con clip path
-  const annotationsGroup = chartGroup.append('g')
-    .attr('class', 'annotations-group')
-    .attr('clip-path', 'url(#chart-clip)');
+  if (!hasActiveAgeFilters()) {
+    // Recrear grupo de anotaciones con clip path
+    const annotationsGroup = chartGroup.append('g')
+      .attr('class', 'annotations-group')
+      .attr('clip-path', 'url(#chart-clip)');
 
-  // Redibujar anotación de Ómicron
-  const omicronDate = parse(CONTENT.omicronAnnotation.date);
-  const omicronX = newXScale(omicronDate);
+    // Redibujar anotación de Ómicron
+    const omicronDate = parse(CONTENT.omicronAnnotation.date);
+    const omicronX = newXScale(omicronDate);
 
-  if (omicronX >= 0 && omicronX <= config.width) {
-    const omicronData = chartData.find(d => d3.timeFormat('%Y-%m-%d')(d.date) === CONTENT.omicronAnnotation.date);
-    const omicronDeathsY = omicronData ? scales.yLeftScale(omicronData.deaths_7d) : config.height * 0.3;
-    const omicronY = omicronDeathsY - 3;
+    if (omicronX >= 0 && omicronX <= config.width) {
+      const omicronData = chartData.find(d => d3.timeFormat('%Y-%m-%d')(d.date) === CONTENT.omicronAnnotation.date);
+      const omicronDeathsY = omicronData ? scales.yLeftScale(omicronData.deaths_7d) : config.height * 0.3;
+      const omicronY = omicronDeathsY - 3;
 
-    const omicronGroup = annotationsGroup.append('g')
-      .attr('class', 'omicron-annotation contextual-element')
-      .attr('data-context-date', CONTENT.omicronAnnotation.date)
-      .attr('data-context-type', 'annotation')
-      .attr('data-context-label', Array.isArray(CONTENT.omicronAnnotation.text) ? CONTENT.omicronAnnotation.text.join(' ') : CONTENT.omicronAnnotation.text || '')
-      .attr('opacity', 0.6);
+      const omicronGroup = annotationsGroup.append('g')
+        .attr('class', 'omicron-annotation contextual-element')
+        .attr('data-context-date', CONTENT.omicronAnnotation.date)
+        .attr('data-context-type', 'annotation')
+        .attr('data-context-label', Array.isArray(CONTENT.omicronAnnotation.text) ? CONTENT.omicronAnnotation.text.join(' ') : CONTENT.omicronAnnotation.text || '')
+        .attr('opacity', 0.6);
 
-    if (Array.isArray(CONTENT.omicronAnnotation.text)) {
-      CONTENT.omicronAnnotation.text.forEach((line, index) => {
-        omicronGroup.append('text')
-          .attr('x', omicronX + 35)
-          .attr('y', omicronY + (index * 12))
-          .attr('fill', '#888')
-          .attr('font-size', '10px')
-          .attr('font-weight', '400')
-          .attr('text-anchor', 'start')
-          .text(line);
-      });
+      if (Array.isArray(CONTENT.omicronAnnotation.text)) {
+        CONTENT.omicronAnnotation.text.forEach((line, index) => {
+          omicronGroup.append('text')
+            .attr('x', omicronX + 35)
+            .attr('y', omicronY + (index * 12))
+            .attr('fill', '#888')
+            .attr('font-size', '10px')
+            .attr('font-weight', '400')
+            .attr('text-anchor', 'start')
+            .text(line);
+        });
+      }
+
+      const arrowY = omicronDeathsY;
+      omicronGroup.append('line')
+        .attr('x1', omicronX + 35)
+        .attr('y1', arrowY)
+        .attr('x2', omicronX)
+        .attr('y2', arrowY)
+        .attr('stroke', '#888')
+        .attr('stroke-width', 1)
+        .attr('marker-end', 'url(#arrowhead)');
     }
 
-    const arrowY = omicronDeathsY;
-    omicronGroup.append('line')
-      .attr('x1', omicronX + 35)
-      .attr('y1', arrowY)
-      .attr('x2', omicronX)
-      .attr('y2', arrowY)
-      .attr('stroke', '#888')
-      .attr('stroke-width', 1)
-      .attr('marker-end', 'url(#arrowhead)');
+    // Redibujar comentarios
+    COMMENTS.forEach(c => {
+      let x;
+      if (c.date) {
+        x = newXScale(parse(c.date));
+      } else if (c.dateRange && c.dateRange.length === 2) {
+        const x1 = newXScale(parse(c.dateRange[0]));
+        const x2 = newXScale(parse(c.dateRange[1]));
+        x = (x1 + x2) / 2;
+      }
+
+      if (x >= -50 && x <= config.width + 50) {
+        const yScale = c.yType === 'right' ? scales.yRightScale : scales.yLeftScale;
+        const y = yScale(c.yValue);
+
+        const lines = Array.isArray(c.text) ? c.text : [c.text];
+        const commentDate = c.date || (Array.isArray(c.dateRange) && c.dateRange.length > 0 ? c.dateRange[Math.floor(c.dateRange.length / 2)] : null);
+        const contextLabel = lines.join(' ');
+
+        const g = annotationsGroup.append('g')
+          .attr('class', `comment comment--${c.id} contextual-element`)
+          .attr('data-context-date', commentDate || '')
+          .attr('data-context-type', 'comment')
+          .attr('data-context-label', contextLabel);
+
+        const xText = x + (c.dx || 0);
+        const yText = y + (c.dy || 0);
+
+        lines.forEach((line, i) => {
+          g.append('text')
+            .attr('x', xText)
+            .attr('y', yText + i * 12)
+            .attr('text-anchor', c.anchor || 'start')
+            .attr('font-size', '9px')
+            .attr('fill', '#888')
+            .attr('opacity', 0.7)
+            .text(line);
+        });
+      }
+    });
   }
-
-  // Redibujar comentarios
-  COMMENTS.forEach(c => {
-    let x;
-    if (c.date) {
-      x = newXScale(parse(c.date));
-    } else if (c.dateRange && c.dateRange.length === 2) {
-      const x1 = newXScale(parse(c.dateRange[0]));
-      const x2 = newXScale(parse(c.dateRange[1]));
-      x = (x1 + x2) / 2;
-    }
-
-    if (x >= -50 && x <= config.width + 50) {
-      const yScale = c.yType === 'right' ? scales.yRightScale : scales.yLeftScale;
-      const y = yScale(c.yValue);
-
-      const lines = Array.isArray(c.text) ? c.text : [c.text];
-      const commentDate = c.date || (Array.isArray(c.dateRange) && c.dateRange.length > 0 ? c.dateRange[Math.floor(c.dateRange.length / 2)] : null);
-      const contextLabel = lines.join(' ');
-
-      const g = annotationsGroup.append('g')
-        .attr('class', `comment comment--${c.id} contextual-element`)
-        .attr('data-context-date', commentDate || '')
-        .attr('data-context-type', 'comment')
-        .attr('data-context-label', contextLabel);
-
-      const xText = x + (c.dx || 0);
-      const yText = y + (c.dy || 0);
-
-      lines.forEach((line, i) => {
-        g.append('text')
-          .attr('x', xText)
-          .attr('y', yText + i * 12)
-          .attr('text-anchor', c.anchor || 'start')
-          .attr('font-size', '9px')
-          .attr('fill', '#888')
-          .attr('opacity', 0.7)
-          .text(line);
-      });
-    }
-  });
 
 }
 
@@ -1507,7 +1483,9 @@ export async function initChart() {
     drawLines(chartGroup, chartData, scales, config);
     addMilestones(chartGroup, scales, config);
     addDirectLabels(chartGroup, chartData, scales, config);
-    addAnnotations(chartGroup, chartData, scales, config);
+    if (!hasActiveAgeFilters()) {
+      addAnnotations(chartGroup, chartData, scales, config);
+    }
 
     // ===== CONFIGURAR ZOOM/PAN =====
     setupZoom(chartSvg, config);

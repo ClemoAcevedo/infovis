@@ -38,10 +38,12 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin: 0;
   padding: 0;
-  max-width: 100%;
-  position: relative;
+  position: absolute;
+  top: 32%;
+  right: 110px;
+  transform: translateY(-50%);
   z-index: 200;
 }
 
@@ -104,6 +106,8 @@ body {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   width: max-content;
+  min-width: 160px;
+  text-align: left;
   max-width: min(90vw, 420px);
   pointer-events: none;
   z-index: 210;
@@ -123,15 +127,16 @@ body {
 
 .filter-checkboxes {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
 }
 
 .filter-checkbox {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
   cursor: pointer;
   user-select: none;
 }
@@ -157,6 +162,8 @@ body {
   color: #bbb;
   white-space: nowrap;
   border: 0.5px solid #e8e8e8;
+  text-align: left;
+  width: 100%;
 }
 
 /* Hover state */
@@ -616,56 +623,6 @@ body {
   }
 }
 
-/* Zoom & Pan controls */
-.zoom-controls {
-  position: absolute;
-  top: 80px;
-  right: 30px;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-.zoom-helper {
-  font-size: 11px;
-  color: #888;
-  background: rgba(255, 255, 255, 0.95);
-  padding: 6px 10px;
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  user-select: none;
-}
-
-.reset-zoom-btn {
-  font-size: 12px;
-  padding: 6px 12px;
-  background: #2C7FB8;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
-  transition: background 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-}
-
-.reset-zoom-btn:hover {
-  background: #1e5a8a;
-}
-
-.reset-zoom-btn:active {
-  transform: translateY(1px);
-}
-
-.reset-zoom-btn:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
 /* Cursor styles for pan */
 .chart-container.grabbable {
   cursor: grab;
@@ -673,31 +630,6 @@ body {
 
 .chart-container.grabbing {
   cursor: grabbing;
-}
-
-/* Responsive zoom controls */
-@media (max-width: 768px) {
-  .zoom-controls {
-    top: 60px;
-    right: 15px;
-  }
-
-  .zoom-helper {
-    font-size: 10px;
-    padding: 5px 8px;
-  }
-
-  .reset-zoom-btn {
-    font-size: 11px;
-    padding: 5px 10px;
-  }
-}
-
-@media (max-width: 480px) {
-  .zoom-controls {
-    top: 50px;
-    right: 10px;
-  }
 }
 
 /* ===== CONTROLES DE SONIFICACIÓN ===== */
@@ -846,8 +778,9 @@ body {
 /* Legend styles */
 .chart-legend {
   position: absolute;
-  top: 20px;
-  left: 20px;
+  top: 50%;
+  left: 68px;
+  transform: translateY(-50%);
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -916,14 +849,18 @@ body {
 
 @media (max-width: 768px) {
   .chart-legend {
-    top: 10px;
-    left: 10px;
+    top: 12px;
+    left: 20px;
+    transform: none;
     font-size: 10px;
     padding: 10px;
     max-width: 150px;
   }
 
   .filters-container {
+    top: 14px;
+    right: 16px;
+    transform: none;
     flex-wrap: wrap;
     gap: 6px;
   }
