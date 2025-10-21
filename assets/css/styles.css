@@ -635,7 +635,7 @@ body {
 /* ===== CONTROLES DE SONIFICACIÓN ===== */
 .sound-controls {
   position: absolute;
-  bottom: 30px;
+  bottom: 18px;
   right: 30px;
   z-index: 100;
   display: flex;
@@ -735,6 +735,11 @@ body {
   pointer-events: none;
 }
 
+.sonification-highlight--vaccination {
+  stroke: rgba(31, 119, 180, 0.95);
+  filter: drop-shadow(0 0 6px rgba(31, 119, 180, 0.7));
+}
+
 @keyframes sonificationGlow {
   0%, 100% {
     stroke-opacity: 0.8;
@@ -748,7 +753,7 @@ body {
 /* Responsive sound controls */
 @media (max-width: 768px) {
   .sound-controls {
-    bottom: 20px;
+    bottom: 12px;
     right: 15px;
     gap: 8px;
   }
@@ -762,7 +767,7 @@ body {
 
 @media (max-width: 480px) {
   .sound-controls {
-    bottom: 15px;
+    bottom: 8px;
     right: 10px;
     flex-direction: column;
     gap: 6px;

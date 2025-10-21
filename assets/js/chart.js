@@ -749,6 +749,8 @@ function updateSeriesVisibility() {
 function redrawChart() {
   if (!chartData || chartData.length === 0) return;
 
+  cleanupSound();
+
   const svg = d3.select('#chart-root');
   svg.selectAll('*').remove();
 
@@ -787,6 +789,7 @@ function redrawChart() {
   // Restaurar zoom
   setupZoom(svg, config);
   setupTooltip(chartGroup, config);
+  updateSoundReferences(scales, filterState, chartGroup, { centerOnDate: centerViewOnDate });
 }
 
 /**
@@ -874,7 +877,7 @@ function actualizarTooltip(event, config) {
   }
 
   // ===== SONIFICACIÓN: reproducir sonido del punto =====
-  // TEMPORALMENTE DESACTIVADO: onHoverPoint(punto);
+  onHoverPoint(punto);
 
   // ===== ACTUALIZAR POSICIÓN DE LA LÍNEA GUÍA =====
   const xPos = xScale(punto.date);
@@ -1353,6 +1356,49 @@ function zoomed(event, config) {
     });
   }
 
+  updateSoundReferences(scales, filterState, chartGroup, { centerOnDate: centerViewOnDate });
+}
+
+function centerViewOnDate(date) {
+  if (!date || !chartSvg || !zoomBehavior || !scales || !scales.xScale) {
+    return;
+  }
+
+  const zoomScale = currentTransform ? currentTransform.k : 1;
+  if (!zoomScale || zoomScale <= 1) {
+    return;
+  }
+
+  const range = scales.xScale.range();
+  if (!Array.isArray(range) || range.length < 2) {
+    return;
+  }
+
+  const width = range[1] - range[0];
+  if (!Number.isFinite(width) || width <= 0) {
+    return;
+  }
+
+  const xPosition = scales.xScale(date);
+  if (!Number.isFinite(xPosition)) {
+    return;
+  }
+
+  const target = width / 2;
+  const delta = target - xPosition;
+
+  if (Math.abs(delta) < 0.5) {
+    return;
+  }
+
+  chartSvg.interrupt();
+  const translateDelta = delta / zoomScale;
+  if (!Number.isFinite(translateDelta)) {
+    return;
+  }
+
+  // Ajustar el paneo en coordenadas normalizadas para evitar saltos cuando hay zoom
+  chartSvg.call(zoomBehavior.translateBy, translateDelta, 0);
 }
 
 /**
@@ -1497,7 +1543,7 @@ export async function initChart() {
     setupTooltip(chartGroup, config);
 
     // ===== CONFIGURAR SONIFICACIÓN =====
-    // TEMPORALMENTE DESACTIVADO: initSound(chartData, filterState, scales, chartGroup);
+    initSound(chartData, filterState, scales, chartGroup, { centerOnDate: centerViewOnDate });
 
     // Setup responsiveness
     makeResponsive();

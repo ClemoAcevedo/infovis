@@ -12,6 +12,11 @@ let isPlaying = false;
 let playbackInterval = null;
 let playbackStartDate = null;
 
+const PLAY_LABEL_DEFAULT = '▶️ Reproducir Sonificación';
+const PLAY_LABEL_STOP = '⏸️ Detener';
+const PLAY_LABEL_DISABLED = '🚫 Solo disponible sin filtros';
+const VACCINATION_COLOR = '#1f77b4';
+
 // ===== ESCALAS DE MAPEO DE DATOS A SONIDO =====
 let escalaMuertes = null;      // Escala: fallecidos → frecuencia (beep de ECG)
 
@@ -28,13 +33,19 @@ let chartGroup = null;
 let deathsMarker = null;
 let chartContainerElement = null;
 let deathsHighlightPath = null;
+let vaccinationHighlightPath = null;
 let originalDeathsStroke = null;
 let originalDeathsStrokeWidth = null;
 let originalDeathsStrokeOpacity = null;
 let originalDeathsStyleOpacity = null;
+let originalVaccinationStroke = null;
+let originalVaccinationStrokeWidth = null;
+let originalVaccinationStrokeOpacity = null;
+let originalVaccinationStyleOpacity = null;
 let contextElements = [];
 let lastPlaybackDate = null;
 let contextDateParser = null;
+let centerOnDateCallback = null;
 
 function ensureChartContainer() {
   if (!chartContainerElement) {
@@ -70,12 +81,53 @@ function ensureHighlightPath() {
   return deathsHighlightPath;
 }
 
-function hideHighlightPath() {
+function ensureVaccinationHighlightPath() {
+  if (!chartGroup || typeof chartGroup.select !== 'function') {
+    return null;
+  }
+
+  if (vaccinationHighlightPath && typeof vaccinationHighlightPath.empty === 'function' && vaccinationHighlightPath.empty()) {
+    vaccinationHighlightPath = null;
+  }
+
+  if (!vaccinationHighlightPath) {
+    const linesGroup = chartGroup.select('.lines-group');
+    const target = linesGroup && typeof linesGroup.empty === 'function' && !linesGroup.empty() ? linesGroup : chartGroup;
+
+    vaccinationHighlightPath = target.append('path')
+      .attr('class', 'sonification-highlight sonification-highlight--vaccination')
+      .attr('fill', 'none')
+      .attr('stroke', VACCINATION_COLOR)
+      .attr('stroke-width', 3)
+      .attr('stroke-linecap', 'round')
+      .attr('stroke-linejoin', 'round')
+      .style('opacity', 0)
+      .style('pointer-events', 'none');
+  }
+
+  return vaccinationHighlightPath;
+}
+
+
+function hideDeathsHighlightPath() {
   if (deathsHighlightPath && typeof deathsHighlightPath.style === 'function') {
     deathsHighlightPath
       .style('opacity', 0)
       .attr('d', null);
   }
+}
+
+function hideVaccinationHighlightPath() {
+  if (vaccinationHighlightPath && typeof vaccinationHighlightPath.style === 'function') {
+    vaccinationHighlightPath
+      .style('opacity', 0)
+      .attr('d', null);
+  }
+}
+
+function hideHighlightPath() {
+  hideDeathsHighlightPath();
+  hideVaccinationHighlightPath();
 }
 
 function ensureDeathsMarker() {
@@ -96,6 +148,64 @@ function hideDeathsMarker() {
     deathsMarker.style.transform = 'translate(-50%, -50%) scale(0.9)';
   }
   hideHighlightPath();
+}
+
+function hasActiveAgeFilters(state) {
+  if (!state) {
+    return false;
+  }
+  return Object.keys(state).some(key => !!state[key]);
+}
+
+function setPlayButtonState({ label, disabled, playing }) {
+  if (!playButton) {
+    return;
+  }
+
+  if (typeof label === 'string') {
+    playButton.textContent = label;
+  }
+
+  if (typeof disabled === 'boolean') {
+    playButton.disabled = disabled;
+    playButton.classList.toggle('disabled', disabled);
+  }
+
+  if (typeof playing === 'boolean') {
+    playButton.classList.toggle('playing', playing);
+  }
+
+  if (disabled) {
+    playButton.classList.remove('playing');
+  }
+}
+
+function updatePlaybackAvailability() {
+  const comparisonActive = hasActiveAgeFilters(filterState);
+
+  if (!playButton) {
+    return;
+  }
+
+  if (comparisonActive) {
+    setPlayButtonState({
+      label: PLAY_LABEL_DISABLED,
+      disabled: true,
+      playing: false
+    });
+
+    if (progressIndicator) {
+      progressIndicator.style.display = 'none';
+    }
+
+    return;
+  }
+
+  setPlayButtonState({
+    label: isPlaying ? PLAY_LABEL_STOP : PLAY_LABEL_DEFAULT,
+    disabled: false,
+    playing: isPlaying
+  });
 }
 
 function getContextDateParser() {
@@ -275,6 +385,66 @@ function setDeathsLineDimmed(isDimmed) {
   }
 }
 
+function setVaccinationLineDimmed(isDimmed) {
+  if (!chartGroup || typeof chartGroup.select !== 'function') {
+    console.warn('setVaccinationLineDimmed: chartGroup no disponible');
+    return;
+  }
+
+  const vaccinationLine = chartGroup.select('.line--vaccination-general');
+  if (vaccinationLine.empty()) {
+    console.warn('setVaccinationLineDimmed: no se encontró la línea de vacunación');
+    return;
+  }
+
+  if (originalVaccinationStroke === null) {
+    originalVaccinationStroke = vaccinationLine.attr('stroke') || VACCINATION_COLOR;
+  }
+  if (originalVaccinationStrokeWidth === null) {
+    const widthAttr = vaccinationLine.attr('stroke-width');
+    originalVaccinationStrokeWidth = widthAttr ? parseFloat(widthAttr) : 3;
+    if (!Number.isFinite(originalVaccinationStrokeWidth)) {
+      originalVaccinationStrokeWidth = 3;
+    }
+  }
+  if (originalVaccinationStrokeOpacity === null) {
+    const opacityAttr = vaccinationLine.attr('stroke-opacity');
+    originalVaccinationStrokeOpacity = opacityAttr ? parseFloat(opacityAttr) : 1;
+    if (!Number.isFinite(originalVaccinationStrokeOpacity)) {
+      originalVaccinationStrokeOpacity = 1;
+    }
+  }
+  if (originalVaccinationStyleOpacity === null) {
+    const styleOpacity = vaccinationLine.style('opacity');
+    originalVaccinationStyleOpacity = styleOpacity !== undefined && styleOpacity !== null && styleOpacity !== ''
+      ? parseFloat(styleOpacity)
+      : null;
+    if (originalVaccinationStyleOpacity !== null && !Number.isFinite(originalVaccinationStyleOpacity)) {
+      originalVaccinationStyleOpacity = null;
+    }
+  }
+
+  vaccinationLine.classed('sonification-dimmed', !!isDimmed);
+
+  if (isDimmed) {
+    const dimmedWidth = Math.max(1, originalVaccinationStrokeWidth * 0.5);
+    vaccinationLine
+      .attr('stroke', 'rgba(31, 119, 180, 0.18)')
+      .attr('stroke-width', dimmedWidth)
+      .attr('stroke-opacity', 0.2)
+      .style('opacity', 0.12);
+    console.log('🔻 Línea de vacunación atenuada durante sonificación');
+  } else {
+    vaccinationLine
+      .attr('stroke', originalVaccinationStroke)
+      .attr('stroke-width', originalVaccinationStrokeWidth)
+      .attr('stroke-opacity', originalVaccinationStrokeOpacity)
+      .style('opacity', originalVaccinationStyleOpacity !== null ? originalVaccinationStyleOpacity : null);
+    console.log('🔺 Línea de vacunación restaurada tras sonificación');
+  }
+}
+
+
 /**
  * Inicializa el contexto de audio y los sintetizadores
  * Se llama después de un gesto del usuario (política de autoplay del navegador)
@@ -351,8 +521,9 @@ function reproducirPunto(punto, duracion = 0.08) {
     return;
   }
 
-  // Solo reproducir si hay datos de fallecidos y el filtro está activo
-  if (filterState && filterState.deaths && punto.deaths_7d != null) {
+  // Solo reproducir si hay datos válidos de fallecidos y la serie está habilitada
+  const deathsEnabled = !filterState || filterState.deaths !== false;
+  if (deathsEnabled && punto.deaths_7d != null && Number.isFinite(punto.deaths_7d)) {
     const frecuenciaBeep = escalaMuertes(punto.deaths_7d);
 
     // MembraneSynth usa triggerAttackRelease con la frecuencia como nota
@@ -403,6 +574,12 @@ async function reproducirSonificacion() {
     return;
   }
 
+  if (hasActiveAgeFilters(filterState)) {
+    updatePlaybackAvailability();
+    console.warn('La sonificación solo está disponible cuando se muestra la población general.');
+    return;
+  }
+
   const datosVisibles = obtenerDatosVisibles();
 
   if (!datosVisibles || datosVisibles.length === 0) {
@@ -414,6 +591,7 @@ async function reproducirSonificacion() {
 
   ensureChartContainer();
   ensureHighlightPath();
+  ensureVaccinationHighlightPath();
   ensureDeathsMarker();
   hideHighlightPath();
   hideDeathsMarker();
@@ -421,19 +599,16 @@ async function reproducirSonificacion() {
   resetContextElementsForPlayback();
   lastPlaybackDate = null;
   setDeathsLineDimmed(true);
+  setVaccinationLineDimmed(true);
 
   console.log('▶️ Reproduciendo sonificación de datos...');
   isPlaying = true;
 
-  // Cambiar texto del botón
-  if (playButton) {
-    playButton.textContent = '⏸️ Detener';
-    playButton.classList.add('playing');
-  }
+  updatePlaybackAvailability();
 
-  // Mostrar indicador de progreso
+  // No mostrar indicador de progreso para evitar superposición visual
   if (progressIndicator) {
-    progressIndicator.style.display = 'block';
+    progressIndicator.style.display = 'none';
   }
 
   // ===== EVENTOS DE REPRODUCCIÓN =====
@@ -448,6 +623,10 @@ async function reproducirSonificacion() {
     }
 
     const punto = datosVisibles[indice];
+
+    if (typeof centerOnDateCallback === 'function') {
+      centerOnDateCallback(punto.date);
+    }
 
     revealContextElementsUpToDate(punto.date);
     if (punto.date instanceof Date && !Number.isNaN(punto.date.getTime())) {
@@ -480,16 +659,13 @@ function detenerReproduccion() {
   isPlaying = false;
   playbackStartDate = null;
   setDeathsLineDimmed(false);
+  setVaccinationLineDimmed(false);
   hideHighlightPath();
   hideDeathsMarker();
   restoreContextElementsVisibility();
   lastPlaybackDate = null;
 
-  // Restaurar botón
-  if (playButton) {
-    playButton.textContent = '▶️ Reproducir Sonificación';
-    playButton.classList.remove('playing');
-  }
+  updatePlaybackAvailability();
 
   // Ocultar indicador de progreso
   if (progressIndicator) {
@@ -511,6 +687,7 @@ function actualizarIndicadorProgreso(punto) {
   const container = ensureChartContainer();
   const chartElement = chartGroup.node ? chartGroup.node() : null;
   ensureHighlightPath();
+  ensureVaccinationHighlightPath();
   ensureDeathsMarker();
 
   if (!container || !chartElement || typeof chartElement.getBoundingClientRect !== 'function') {
@@ -554,12 +731,11 @@ function actualizarIndicadorProgreso(punto) {
   const indicatorTop = Math.min(projectedTop.top, projectedBottom.top);
   const indicatorHeight = Math.abs(projectedBottom.top - projectedTop.top);
 
-  progressIndicator.style.left = `${indicatorLeft}px`;
-  progressIndicator.style.top = `${indicatorTop}px`;
-  progressIndicator.style.height = `${indicatorHeight}px`;
-  progressIndicator.style.display = 'block';
+  progressIndicator.style.display = 'none';
 
   const highlightPath = ensureHighlightPath();
+  const vaccinationHighlightPath = ensureVaccinationHighlightPath();
+
   if (highlightPath && chartData) {
     const minDate = playbackStartDate instanceof Date ? playbackStartDate : null;
     const highlightData = chartData.filter(d =>
@@ -581,9 +757,39 @@ function actualizarIndicadorProgreso(punto) {
         .attr('d', highlightLine(highlightData))
         .style('opacity', 1);
     } else {
-      hideHighlightPath();
+      hideDeathsHighlightPath();
     }
+  } else {
+    hideDeathsHighlightPath();
   }
+
+  if (vaccinationHighlightPath && chartData) {
+    const minDate = playbackStartDate instanceof Date ? playbackStartDate : null;
+    const vaccinationHighlightData = chartData.filter(d =>
+      d.date instanceof Date &&
+      d.date <= punto.date &&
+      (!minDate || d.date >= minDate) &&
+      d.vaccinated_pct != null &&
+      isFinite(d.vaccinated_pct)
+    );
+
+    if (vaccinationHighlightData.length >= 2) {
+      const vaccinationLine = d3.line()
+        .x(d => scales.xScale(d.date))
+        .y(d => scales.yRightScale(d.vaccinated_pct))
+        .curve(d3.curveMonotoneX)
+        .defined(d => d.date && !isNaN(d.vaccinated_pct) && isFinite(d.vaccinated_pct));
+
+      vaccinationHighlightPath
+        .attr('d', vaccinationLine(vaccinationHighlightData))
+        .style('opacity', 1);
+    } else {
+      hideVaccinationHighlightPath();
+    }
+  } else {
+    hideVaccinationHighlightPath();
+  }
+
 
   if (deathsMarker) {
     if (punto.deaths_7d != null && isFinite(punto.deaths_7d)) {
@@ -650,6 +856,8 @@ export function cleanupSound() {
   restoreContextElementsVisibility();
   lastPlaybackDate = null;
   setDeathsLineDimmed(false);
+  setVaccinationLineDimmed(false);
+  updatePlaybackAvailability();
 
   console.log('🧹 Limpieza de sonificación completada');
 }
@@ -661,7 +869,7 @@ export function cleanupSound() {
  * @param {Object} chartScales - Escalas del gráfico
  * @param {Object} svg - Grupo SVG del gráfico
  */
-export function initSound(data, filters, chartScales, svg) {
+export function initSound(data, filters, chartScales, svg, options = {}) {
   console.log('🎼 Inicializando módulo de sonificación...');
 
   // Guardar referencias globales
@@ -672,7 +880,9 @@ export function initSound(data, filters, chartScales, svg) {
 
   chartContainerElement = document.getElementById('chart-container');
   ensureHighlightPath();
+  ensureVaccinationHighlightPath();
   ensureDeathsMarker();
+  centerOnDateCallback = typeof options.centerOnDate === 'function' ? options.centerOnDate : centerOnDateCallback;
   refreshContextElements();
 
   // Configurar escalas de sonido
@@ -698,6 +908,8 @@ export function initSound(data, filters, chartScales, svg) {
     console.log('✅ Botón de silencio configurado');
   }
 
+  updatePlaybackAvailability();
+
   console.log('✅ Módulo de sonificación inicializado correctamente');
   console.log('📌 Nota: El audio se activará después del primer clic en "Reproducir" (política de autoplay del navegador)');
 }
@@ -706,20 +918,39 @@ export function initSound(data, filters, chartScales, svg) {
  * Actualiza las referencias del módulo cuando cambian (ej. después de zoom/resize)
  * @param {Object} chartScales - Nuevas escalas del gráfico
  * @param {Object} filters - Nuevo estado de filtros
+ * @param {Object} [svgGroup] - Nuevo grupo SVG (opcional)
  */
-export function updateSoundReferences(chartScales, filters) {
+export function updateSoundReferences(chartScales, filters, svgGroup = null, options = {}) {
   scales = chartScales;
   filterState = filters;
 
+  const hasValidGroup = svgGroup && typeof svgGroup.select === 'function';
+  if (hasValidGroup) {
+    const isDifferentGroup = chartGroup !== svgGroup;
+    chartGroup = svgGroup;
+    if (isDifferentGroup) {
+      deathsHighlightPath = null;
+      vaccinationHighlightPath = null;
+    }
+  }
+
   ensureChartContainer();
   ensureHighlightPath();
+  ensureVaccinationHighlightPath();
   ensureDeathsMarker();
   refreshContextElements();
   setDeathsLineDimmed(isPlaying);
+  setVaccinationLineDimmed(isPlaying);
+
+  if (options && typeof options.centerOnDate === 'function') {
+    centerOnDateCallback = options.centerOnDate;
+  }
 
   if (!isPlaying) {
     hideDeathsMarker();
   }
+
+  updatePlaybackAvailability();
 
   console.log('🔄 Referencias de sonificación actualizadas');
 }
