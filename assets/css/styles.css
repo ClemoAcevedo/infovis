@@ -31,47 +31,195 @@ body {
   box-sizing: border-box;
 }
 
-/* Filters container */
+/* Filters container - Desplegable minimalista */
 .filters-container {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 12px;
-  padding: 8px;
+  padding: 0;
+  max-width: 100%;
+  position: relative;
+  z-index: 200;
 }
 
-.filter-label {
-  font-size: 13px;
+/* Botón toggle - ultra minimalista */
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: transparent;
+  border: 0.5px solid #e8e8e8;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  color: #999;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.filter-toggle:hover {
+  border-color: #d0d0d0;
   color: #666;
-  font-weight: 500;
+}
+
+.filter-toggle-icon {
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+.filter-toggle-text {
+  font-size: 10px;
+  letter-spacing: 0.2px;
+}
+
+.filter-toggle-arrow {
+  font-size: 7px;
+  transition: transform 0.15s ease;
+  opacity: 0.4;
+}
+
+.filter-toggle.active {
+  border-color: #ccc;
+}
+
+.filter-toggle.active .filter-toggle-arrow {
+  transform: rotate(180deg);
+}
+
+/* Dropdown */
+.filter-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translate(-50%, -6px);
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  padding: 0 10px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  width: max-content;
+  max-width: min(90vw, 420px);
+  pointer-events: none;
+  z-index: 210;
+  transition: max-height 0.3s ease, opacity 0.2s ease, transform 0.2s ease;
+  opacity: 0;
+  max-height: 0;
+}
+
+.filter-dropdown.open {
+  opacity: 1;
+  max-height: 200px;
+  padding: 6px 10px;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  overflow-y: auto;
 }
 
 .filter-checkboxes {
   display: flex;
-  gap: 20px;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
 }
 
 .filter-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  position: relative;
+  display: inline-flex;
   cursor: pointer;
   user-select: none;
 }
 
+/* Ocultar checkbox nativo completamente */
 .filter-checkbox input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: #2C7FB8;
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
 }
 
+/* Chip ultra-minimalista - estado base */
 .checkbox-label {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 9px;
+  font-weight: 400;
+  padding: 2px 8px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: all 0.15s ease-out;
+  background: transparent;
+  color: #bbb;
+  white-space: nowrap;
+  border: 0.5px solid #e8e8e8;
+}
+
+/* Hover state */
+.filter-checkbox:hover .checkbox-label {
+  border-color: #d0d0d0;
+  color: #999;
+}
+
+/* Checked state - ultra sutiles con colores de grupo */
+#filter-age-0-39:checked + .checkbox-label {
+  background: #4ECDC4;
+  border-color: #4ECDC4;
+  color: white;
+  font-weight: 500;
+  border-width: 1px;
+}
+
+#filter-age-40-49:checked + .checkbox-label {
+  background: #45B7D1;
+  border-color: #45B7D1;
+  color: white;
+  font-weight: 500;
+  border-width: 1px;
+}
+
+#filter-age-50-59:checked + .checkbox-label {
+  background: #5B8C5A;
+  border-color: #5B8C5A;
+  color: white;
+  font-weight: 500;
+  border-width: 1px;
+}
+
+#filter-age-60-69:checked + .checkbox-label {
+  background: #F4A259;
+  border-color: #F4A259;
+  color: white;
+  font-weight: 500;
+  border-width: 1px;
+}
+
+#filter-age-70-79:checked + .checkbox-label {
+  background: #E76F51;
+  border-color: #E76F51;
+  color: white;
+  font-weight: 500;
+  border-width: 1px;
+}
+
+#filter-age-80-89:checked + .checkbox-label {
+  background: #D62828;
+  border-color: #D62828;
+  color: white;
+  font-weight: 500;
+  border-width: 1px;
+}
+
+#filter-age-90-plus:checked + .checkbox-label {
+  background: #8B0000;
+  border-color: #8B0000;
+  color: white;
+  font-weight: 500;
+  border-width: 1px;
 }
 
 .vaccination-label {
@@ -80,11 +228,6 @@ body {
 
 .deaths-label {
   color: #D43F3A;
-}
-
-.filter-checkbox input[type="checkbox"]:not(:checked) + .checkbox-label {
-  opacity: 0.4;
-  text-decoration: line-through;
 }
 
 /* No data message */
@@ -111,11 +254,12 @@ body {
   border: 1px solid #ddd;
   border-radius: 6px;
   padding: 10px 12px;
-  font-size: 12px;
-  line-height: 1.6;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.15);
+  font-size: 11px;
+  line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   z-index: 100;
-  min-width: 180px;
+  min-width: 160px;
+  max-width: 220px;
   transition: opacity 0.2s;
 }
 
@@ -158,19 +302,20 @@ body {
 
 /* Typography (refined) */
 .title {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 500;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   text-align: center;
-  color: #444;
+  color: #333;
+  letter-spacing: -0.3px;
 }
 
 .subtitle {
-  font-size: 15px;
-  color: #777;
-  margin-bottom: 32px;
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 20px;
   text-align: center;
-  font-weight: 300;
+  font-weight: 400;
 }
 
 .source {
@@ -234,17 +379,18 @@ body {
   fill: none;
 }
 
-.line--deaths {
+/* Solo aplicar a líneas generales, no a grupos etarios */
+.line--deaths-general {
   stroke: #D43F3A;
 }
 
-.line--deaths.sonification-dimmed {
+.line--deaths-general.sonification-dimmed {
   stroke: rgba(212, 63, 58, 0.12) !important;
   opacity: 0.08 !important;
   stroke-width: 1.2px !important;
 }
 
-.line--vaccination {
+.line--vaccination-general {
   stroke: #2C7FB8;
 }
 
@@ -437,11 +583,16 @@ body {
 
 /* High contrast mode support */
 @media (prefers-contrast: high) {
-  .line--deaths {
+  .line--deaths-general {
     stroke-width: 3;
   }
 
-  .line--vaccination {
+  .line--vaccination-general {
+    stroke-width: 3;
+  }
+
+  /* Grupos etarios también */
+  .line {
     stroke-width: 3;
   }
 
@@ -689,5 +840,113 @@ body {
   .sound-mute-btn {
     font-size: 10px;
     padding: 5px 8px;
+  }
+}
+
+/* Legend styles */
+.chart-legend {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 11px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 180px;
+  z-index: 100;
+}
+
+.chart-legend-title {
+  font-weight: 600;
+  color: #444;
+  margin-bottom: 8px;
+  font-size: 11px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 6px;
+}
+
+.legend-section {
+  margin-bottom: 8px;
+}
+
+.legend-section:last-child {
+  margin-bottom: 0;
+}
+
+.legend-section-title {
+  font-weight: 500;
+  color: #666;
+  font-size: 10px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.legend-color-box {
+  width: 20px;
+  height: 3px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.legend-color-box.dashed {
+  background: linear-gradient(to right, currentColor 50%, transparent 50%);
+  background-size: 8px 3px;
+  background-repeat: repeat-x;
+}
+
+.legend-label {
+  color: #555;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.legend-general {
+  opacity: 0.5;
+}
+
+@media (max-width: 768px) {
+  .chart-legend {
+    top: 10px;
+    left: 10px;
+    font-size: 10px;
+    padding: 10px;
+    max-width: 150px;
+  }
+
+  .filters-container {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .filter-checkboxes {
+    gap: 3px;
+  }
+
+  .checkbox-label {
+    font-size: 8px;
+    padding: 2px 6px;
+  }
+
+  .filter-label {
+    font-size: 9px;
+  }
+
+  .filter-toggle {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  .filter-toggle-text {
+    font-size: 9px;
   }
 }

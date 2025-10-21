@@ -24,6 +24,16 @@ export const COLORS = {
     primary: '#AAA',
     secondary: '#BBB',
     tertiary: '#CCC'
+  },
+  // Colores por grupo etario (escala de colores cálidos a fríos por edad)
+  ageGroups: {
+    '<=39': '#4ECDC4',      // Cyan/turquesa (jóvenes)
+    '40-49': '#45B7D1',     // Azul claro
+    '50-59': '#5B8C5A',     // Verde
+    '60-69': '#F4A259',     // Naranja claro
+    '70-79': '#E76F51',     // Naranja/rojo
+    '80-89': '#D62828',     // Rojo
+    '>=90': '#8B0000'       // Rojo oscuro (mayores)
   }
 };
 

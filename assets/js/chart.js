@@ -24,9 +24,29 @@ let currentTransform = d3.zoomIdentity;
 let originalXScale = null;
 
 // ===== ESTADO GLOBAL DE FILTROS =====
+// Grupos etarios disponibles
+const AGE_GROUPS = ['<=39', '40-49', '50-59', '60-69', '70-79', '80-89', '>=90'];
+
+// Mapeo de IDs de filtros a nombres de grupos
+const FILTER_ID_TO_GROUP = {
+  'filter-age-0-39': '<=39',
+  'filter-age-40-49': '40-49',
+  'filter-age-50-59': '50-59',
+  'filter-age-60-69': '60-69',
+  'filter-age-70-79': '70-79',
+  'filter-age-80-89': '80-89',
+  'filter-age-90-plus': '>=90'
+};
+
+// Estado de filtros por grupo etario (ninguno seleccionado por defecto = solo población general)
 let filterState = {
-  vaccination: true,  // Vacunación visible por defecto
-  deaths: true        // Fallecidos visible por defecto
+  '<=39': false,
+  '40-49': false,
+  '50-59': false,
+  '60-69': false,
+  '70-79': false,
+  '80-89': false,
+  '>=90': false
 };
 
 // ===== ESTADO GLOBAL DEL TOOLTIP =====
@@ -38,6 +58,53 @@ let tooltipElements = {
 };
 
 let bisectDate = null;  // Bisector para encontrar punto de datos más cercano
+
+/**
+ * Calcula los datos filtrados sumando solo los grupos etarios seleccionados
+ * @param {Array} data - Datos originales
+ * @returns {Array} Datos con deaths_7d y vaccinated_pct calculados según filtros
+ */
+function calculateFilteredData(data) {
+  return data.map(d => {
+    // Calcular suma de fallecidos para grupos seleccionados
+    let deaths_7d = 0;
+    let totalPoblacion = 0;
+    let vaccinationSum = 0;
+
+    // Población por grupo (necesaria para ponderar vacunación)
+    const POBLACION_GRUPOS = {
+      '<=39': 10_500_000,
+      '40-49': 2_500_000,
+      '50-59': 2_400_000,
+      '60-69': 2_000_000,
+      '70-79': 1_200_000,
+      '80-89': 500_000,
+      '>=90': 116_000
+    };
+
+    AGE_GROUPS.forEach(group => {
+      if (filterState[group]) {
+        // Sumar fallecidos
+        deaths_7d += d[`deaths_${group}`] || 0;
+
+        // Para vacunación, hacer promedio ponderado por población
+        const pob = POBLACION_GRUPOS[group];
+        const vacPct = d[`vaccinated_pct_${group}`] || 0;
+        vaccinationSum += vacPct * pob;
+        totalPoblacion += pob;
+      }
+    });
+
+    // Calcular porcentaje de vacunación promedio ponderado
+    const vaccinated_pct = totalPoblacion > 0 ? vaccinationSum / totalPoblacion : 0;
+
+    return {
+      ...d,
+      deaths_7d,
+      vaccinated_pct
+    };
+  });
+}
 
 /**
  * Builds scales for the chart
@@ -57,7 +124,7 @@ export function buildScales(data, config) {
     .range([height, 0]);
 
   const yRightScale = d3.scaleLinear()
-    .domain([0, 100])
+    .domain([0, 105])
     .range([height, 0]);
 
   return { xScale, yLeftScale, yRightScale };
@@ -152,19 +219,6 @@ export function drawLines(svg, data, scales, config) {
     .attr('class', 'lines-group')
     .attr('clip-path', 'url(#chart-clip)');
 
-  // Line generators
-  const deathsLine = d3.line()
-    .x(d => xScale(d.date))
-    .y(d => yLeftScale(d.deaths_7d))
-    .curve(d3.curveMonotoneX)
-    .defined(d => d.date && !isNaN(d.deaths_7d) && isFinite(d.deaths_7d));
-
-  const vaccinationLine = d3.line()
-    .x(d => xScale(d.date))
-    .y(d => yRightScale(d.vaccinated_pct))
-    .curve(d3.curveMonotoneX)
-    .defined(d => d.date && !isNaN(d.vaccinated_pct) && isFinite(d.vaccinated_pct));
-
   // Get responsive styles
   const deathsStyle = getResponsiveLineStyle(
     LINE_STYLES.deaths,
@@ -172,25 +226,90 @@ export function drawLines(svg, data, scales, config) {
     mobile
   );
 
-  // Draw deaths line (dentro del grupo con clip)
+  // ===== 1. DIBUJAR SIEMPRE POBLACIÓN GENERAL (LÍNEA BASE) =====
+  const deathsLineGeneral = d3.line()
+    .x(d => xScale(d.date))
+    .y(d => yLeftScale(d.deaths_7d))
+    .curve(d3.curveMonotoneX)
+    .defined(d => d.date && !isNaN(d.deaths_7d) && isFinite(d.deaths_7d));
+
+  const vaccinationLineGeneral = d3.line()
+    .x(d => xScale(d.date))
+    .y(d => yRightScale(d.vaccinated_pct))
+    .curve(d3.curveMonotoneX)
+    .defined(d => d.date && !isNaN(d.vaccinated_pct) && isFinite(d.vaccinated_pct));
+
+  // Verificar si hay grupos seleccionados
+  const hasSelectedGroups = AGE_GROUPS.some(group => filterState[group]);
+  const generalOpacity = hasSelectedGroups ? 0.3 : 1; // Tenue si hay grupos seleccionados
+
+  // Fallecidos población general
   linesGroup.append('path')
     .datum(data)
-    .attr('class', 'line line--deaths')
+    .attr('class', 'line line--deaths line--deaths-general')
     .attr('fill', 'none')
     .attr('stroke', COLORS.deaths)
     .attr('stroke-width', deathsStyle.strokeWidth)
-    .attr('stroke-opacity', deathsStyle.strokeOpacity)
-    .attr('d', deathsLine);
+    .attr('stroke-opacity', deathsStyle.strokeOpacity * generalOpacity)
+    .attr('d', deathsLineGeneral);
 
-  // Draw vaccination line (dentro del grupo con clip)
+  // Vacunación población general
   linesGroup.append('path')
     .datum(data)
-    .attr('class', 'line line--vaccination')
+    .attr('class', 'line line--vaccination line--vaccination-general')
     .attr('fill', 'none')
     .attr('stroke', COLORS.vaccination)
     .attr('stroke-width', LINE_STYLES.vaccination.strokeWidth)
-    .attr('stroke-opacity', LINE_STYLES.vaccination.strokeOpacity)
-    .attr('d', vaccinationLine);
+    .attr('stroke-opacity', LINE_STYLES.vaccination.strokeOpacity * generalOpacity)
+    .attr('d', vaccinationLineGeneral);
+
+  // ===== 2. DIBUJAR LÍNEAS POR GRUPO ETARIO SELECCIONADO =====
+  const selectedGroups = AGE_GROUPS.filter(g => filterState[g]);
+
+  AGE_GROUPS.forEach(group => {
+    if (filterState[group]) {
+      const color = COLORS.ageGroups[group];
+      // Escapar caracteres especiales para CSS class
+      const groupClass = group.replace(/[<>=]/g, '_');
+
+      // Line generator para fallecidos de este grupo
+      const deathsLineGroup = d3.line()
+        .x(d => xScale(d.date))
+        .y(d => yLeftScale(d[`deaths_${group}`]))
+        .curve(d3.curveMonotoneX)
+        .defined(d => d.date && !isNaN(d[`deaths_${group}`]) && isFinite(d[`deaths_${group}`]));
+
+      // Line generator para vacunación de este grupo
+      const vaccinationLineGroup = d3.line()
+        .x(d => xScale(d.date))
+        .y(d => yRightScale(d[`vaccinated_pct_${group}`]))
+        .curve(d3.curveMonotoneX)
+        .defined(d => d.date && !isNaN(d[`vaccinated_pct_${group}`]) && isFinite(d[`vaccinated_pct_${group}`]));
+
+      // Fallecidos del grupo (línea sólida)
+      linesGroup.append('path')
+        .datum(data)
+        .attr('class', `line line--deaths line--deaths-${groupClass}`)
+        .attr('data-age-group', group)
+        .attr('fill', 'none')
+        .attr('stroke', color)
+        .attr('stroke-width', deathsStyle.strokeWidth)
+        .attr('stroke-opacity', 0.9)
+        .attr('d', deathsLineGroup);
+
+      // Vacunación del grupo (línea punteada para diferenciar)
+      linesGroup.append('path')
+        .datum(data)
+        .attr('class', `line line--vaccination line--vaccination-${groupClass}`)
+        .attr('data-age-group', group)
+        .attr('fill', 'none')
+        .attr('stroke', color)
+        .attr('stroke-width', LINE_STYLES.vaccination.strokeWidth)
+        .attr('stroke-opacity', 0.7)
+        .attr('stroke-dasharray', '4,2')
+        .attr('d', vaccinationLineGroup);
+    }
+  });
 }
 
 /**
@@ -210,8 +329,7 @@ export function addMilestones(svg, scales, config) {
 
   // ===== CREAR GRUPO CON CLIP PATH PARA HITOS =====
   const milestonesGroup = svg.append('g')
-    .attr('class', 'milestones-group')
-    .attr('clip-path', 'url(#chart-clip)');
+    .attr('class', 'milestones-group');
 
   MILESTONES.forEach(milestone => {
     const milestoneDate = d3.timeParse('%Y-%m-%d')(milestone.date);
@@ -225,6 +343,10 @@ export function addMilestones(svg, scales, config) {
         .attr('data-context-type', 'milestone')
         .attr('data-context-label', labelText || '')
         .attr('transform', `translate(${x},0)`);
+
+      const lineGroup = milestoneGroup.append('g')
+        .attr('class', 'milestone-line-group')
+        .attr('clip-path', 'url(#chart-clip)');
 
       // Create gradient effect with multiple dotted line segments
       const segments = 20; // Number of segments to create gradient effect
@@ -240,7 +362,7 @@ export function addMilestones(svg, scales, config) {
         const opacity = 0.4 * (1 - i / segments); // Fade from 0.4 to 0
 
         if (opacity > 0.02) { // Only draw visible segments
-          milestoneGroup.append('line')
+          lineGroup.append('line')
             .attr('class', `milestone milestone--${milestone.style}`)
             .attr('x1', 0)
             .attr('x2', 0)
@@ -299,15 +421,41 @@ export function addMilestones(svg, scales, config) {
       if (svg.select('#milestone-arrow').empty()) {
         svg.select('defs').append('marker')
           .attr('id', 'milestone-arrow')
-          .attr('markerWidth', 4)
-          .attr('markerHeight', 4)
-          .attr('refX', 2)
-          .attr('refY', 2)
+          .attr('markerWidth', 6)
+          .attr('markerHeight', 6)
+          .attr('refX', 3)
+          .attr('refY', 3)
           .attr('orient', 'auto')
           .append('polygon')
-          .attr('points', '0 0, 4 2, 0 4')
+          .attr('points', '0 0, 6 3, 0 6')
           .attr('fill', '#666');
       }
+
+      // Add arrow at the bottom of the vertical line
+      if (svg.select('#milestone-arrow-bottom').empty()) {
+        svg.select('defs').append('marker')
+          .attr('id', 'milestone-arrow-bottom')
+          .attr('markerWidth', 8)
+          .attr('markerHeight', 8)
+          .attr('refX', 4)
+          .attr('refY', 4)
+          .attr('orient', 'auto')
+          .append('polygon')
+          .attr('points', '0 0, 8 4, 0 8')
+          .attr('fill', COLORS.milestone[milestone.style])
+          .attr('opacity', 0.6);
+      }
+
+      // Add a line with arrow at the bottom
+      lineGroup.append('line')
+        .attr('x1', 0)
+        .attr('y1', height - 15)
+        .attr('x2', 0)
+        .attr('y2', height)
+        .attr('stroke', COLORS.milestone[milestone.style])
+        .attr('stroke-width', 1.5)
+        .attr('stroke-opacity', 0.6)
+        .attr('marker-end', 'url(#milestone-arrow-bottom)');
     }
   });
 }
@@ -547,118 +695,154 @@ export function makeResponsive() {
 
 // ===== CONFIGURACIÓN DE FILTROS =====
 /**
+ * Actualiza la leyenda según los grupos seleccionados
+ */
+function updateLegend() {
+  const legendContainer = document.getElementById('chart-legend');
+  if (!legendContainer) return;
+
+  const selectedGroups = AGE_GROUPS.filter(g => filterState[g]);
+
+  // Si no hay grupos seleccionados, ocultar la leyenda
+  if (selectedGroups.length === 0) {
+    legendContainer.style.display = 'none';
+    return;
+  }
+
+  // Mostrar la leyenda
+  legendContainer.style.display = 'block';
+
+  // Generar contenido HTML de la leyenda
+  let legendHTML = '<div class="chart-legend-title">Comparación</div>';
+
+  // Sección de población general
+  legendHTML += '<div class="legend-section legend-general">';
+  legendHTML += '<div class="legend-section-title">Población General</div>';
+  legendHTML += `<div class="legend-item">
+    <div class="legend-color-box" style="background-color: ${COLORS.deaths};"></div>
+    <div class="legend-label">Fallecidos</div>
+  </div>`;
+  legendHTML += `<div class="legend-item">
+    <div class="legend-color-box dashed" style="color: ${COLORS.vaccination};"></div>
+    <div class="legend-label">Vacunación</div>
+  </div>`;
+  legendHTML += '</div>';
+
+  // Sección de grupos etarios
+  if (selectedGroups.length > 0) {
+    legendHTML += '<div class="legend-section">';
+    legendHTML += '<div class="legend-section-title">Grupos Etarios</div>';
+
+    selectedGroups.forEach(group => {
+      const color = COLORS.ageGroups[group];
+      const label = group === '<=39' ? '≤39 años' :
+                    group === '>=90' ? '≥90 años' :
+                    `${group} años`;
+
+      legendHTML += `<div class="legend-item">
+        <div class="legend-color-box" style="background-color: ${color};"></div>
+        <div class="legend-label">${label}</div>
+      </div>`;
+    });
+
+    legendHTML += '</div>';
+  }
+
+  legendContainer.innerHTML = legendHTML;
+}
+
+/**
  * Actualiza la visibilidad de las series según el estado de los filtros
  */
 function updateSeriesVisibility() {
-  const vaccinationLine = chartGroup.select('.lines-group .line--vaccination');
-  const deathsLine = chartGroup.select('.lines-group .line--deaths');
-  const vaccinationLabel = chartGroup.select('.direct-label.vaccination-label');
-  const deathsLabel = chartGroup.select('.direct-label.deaths-label');
-  const noDataMessage = d3.select('#no-data-message');
+  // Actualizar la leyenda
+  updateLegend();
 
-  // ===== ACTUALIZACIÓN DE VISIBILIDAD CON TRANSICIONES =====
-  // Línea de vacunación
-  if (filterState.vaccination) {
-    vaccinationLine
-      .transition()
-      .duration(500)
-      .style('opacity', 1)
-      .style('stroke-width', LINE_STYLES.vaccination.strokeWidth);
+  // Simplemente redibujar todo el gráfico cuando cambian los filtros
+  redrawChart();
+}
 
-    vaccinationLabel
-      .transition()
-      .duration(500)
-      .style('opacity', 1);
+/**
+ * Redibuja todo el gráfico (usado cuando cambian los filtros)
+ */
+function redrawChart() {
+  if (!chartData || chartData.length === 0) return;
 
-    console.log('✅ Serie reactivada: vacunación');
-  } else {
-    vaccinationLine
-      .transition()
-      .duration(500)
-      .style('opacity', 0.1)
-      .style('stroke-width', 0.5);
+  const svg = d3.select('#chart-root');
+  svg.selectAll('*').remove();
 
-    vaccinationLabel
-      .transition()
-      .duration(500)
-      .style('opacity', 0.3);
+  // Asegurar que el SVG tenga el viewBox correcto
+  svg.attr('viewBox', `0 0 ${CHART_CONFIG.width} ${CHART_CONFIG.height}`)
+     .attr('preserveAspectRatio', 'xMidYMid meet');
 
-    console.log('❌ Serie oculta: vacunación');
-  }
+  const config = {
+    width: CHART_CONFIG.width - CHART_CONFIG.margin.left - CHART_CONFIG.margin.right,
+    height: CHART_CONFIG.height - CHART_CONFIG.margin.top - CHART_CONFIG.margin.bottom
+  };
 
-  // Línea de fallecidos
-  if (filterState.deaths) {
-    const mobile = isMobile(BREAKPOINTS.mobile);
-    const deathsStyle = getResponsiveLineStyle(
-      LINE_STYLES.deaths,
-      LINE_STYLES.mobile.deaths,
-      mobile
-    );
+  chartGroup = svg.append('g')
+    .attr('transform', `translate(${CHART_CONFIG.margin.left},${CHART_CONFIG.margin.top})`);
 
-    deathsLine
-      .transition()
-      .duration(500)
-      .style('opacity', 1)
-      .style('stroke-width', deathsStyle.strokeWidth);
+  // Recrear clip path
+  svg.append('defs').append('clipPath')
+    .attr('id', 'chart-clip')
+    .append('rect')
+    .attr('x', 0)
+    .attr('y', 0)
+    .attr('width', config.width)
+    .attr('height', config.height);
 
-    deathsLabel
-      .transition()
-      .duration(500)
-      .style('opacity', 1);
+  // Rebuild chart
+  scales = buildScales(chartData, config);
+  originalXScale = scales.xScale.copy();
+  drawAxes(chartGroup, scales, config);
+  drawLines(chartGroup, chartData, scales, config);
+  addMilestones(chartGroup, scales, config);
+  addDirectLabels(chartGroup, chartData, scales, config);
+  addAnnotations(chartGroup, chartData, scales, config);
 
-    console.log('✅ Serie reactivada: fallecidos');
-  } else {
-    deathsLine
-      .transition()
-      .duration(500)
-      .style('opacity', 0.1)
-      .style('stroke-width', 0.5);
-
-    deathsLabel
-      .transition()
-      .duration(500)
-      .style('opacity', 0.3);
-
-    console.log('❌ Serie oculta: fallecidos');
-  }
-
-  // ===== MANEJO DE CASO: AMBOS FILTROS DESACTIVADOS =====
-  if (!filterState.vaccination && !filterState.deaths) {
-    noDataMessage.style('display', 'block');
-    console.log('⚠️ Advertencia: No hay series visibles. Mostrando mensaje al usuario.');
-  } else {
-    noDataMessage.style('display', 'none');
-  }
-
-  // ===== ACTUALIZAR REFERENCIAS DE SONIFICACIÓN =====
-  updateSoundReferences(scales, filterState);
+  // Restaurar zoom
+  setupZoom(svg, config);
+  setupTooltip(chartGroup, config);
 }
 
 /**
  * Configura los filtros de series
  */
 function setupFilters() {
-  // ===== EVENTOS DE CHECKBOX =====
-  const vaccinationCheckbox = document.getElementById('filter-vaccination');
-  const deathsCheckbox = document.getElementById('filter-deaths');
+  // ===== TOGGLE DEL DROPDOWN =====
+  const toggleBtn = document.getElementById('filter-toggle');
+  const dropdown = document.getElementById('filter-dropdown');
 
-  if (vaccinationCheckbox) {
-    vaccinationCheckbox.addEventListener('change', (event) => {
-      filterState.vaccination = event.target.checked;
-      console.log(`📊 Filtro de vacunación: ${filterState.vaccination ? 'activado' : 'desactivado'}`);
-      updateSeriesVisibility();
+  if (toggleBtn && dropdown) {
+    toggleBtn.addEventListener('click', () => {
+      const isOpen = dropdown.classList.contains('open');
+
+      if (isOpen) {
+        dropdown.classList.remove('open');
+        toggleBtn.classList.remove('active');
+        dropdown.style.display = 'none';
+      } else {
+        dropdown.style.display = 'block';
+        setTimeout(() => {
+          dropdown.classList.add('open');
+          toggleBtn.classList.add('active');
+        }, 10);
+      }
     });
   }
 
-  if (deathsCheckbox) {
-    deathsCheckbox.addEventListener('change', (event) => {
-      filterState.deaths = event.target.checked;
-      console.log(`📊 Filtro de fallecidos: ${filterState.deaths ? 'activado' : 'desactivado'}`);
-      updateSeriesVisibility();
-    });
-  }
+  // ===== EVENTOS DE CHECKBOX PARA GRUPOS ETARIOS =====
+  Object.entries(FILTER_ID_TO_GROUP).forEach(([filterId, group]) => {
+    const checkbox = document.getElementById(filterId);
 
-  console.log('✅ Sistema de filtros inicializado correctamente');
+    if (checkbox) {
+      checkbox.addEventListener('change', (event) => {
+        filterState[group] = event.target.checked;
+        updateSeriesVisibility();
+      });
+    }
+  });
 }
 
 // ===== CONFIGURACIÓN DE TOOLTIP (DETAILS ON DEMAND) =====
@@ -706,15 +890,8 @@ function actualizarTooltip(event, config) {
     return;
   }
 
-  // ===== LOG DE DEBUG EN ESPAÑOL =====
-  console.log('📍 Fecha bajo el cursor:',
-    d3.timeFormat('%d/%m/%Y')(punto.date),
-    '| Fallecidos:', Math.round(punto.deaths_7d),
-    '| Vacunación:', punto.vaccinated_pct.toFixed(1) + '%'
-  );
-
   // ===== SONIFICACIÓN: reproducir sonido del punto =====
-  onHoverPoint(punto);
+  // TEMPORALMENTE DESACTIVADO: onHoverPoint(punto);
 
   // ===== ACTUALIZAR POSICIÓN DE LA LÍNEA GUÍA =====
   const xPos = xScale(punto.date);
@@ -726,54 +903,114 @@ function actualizarTooltip(event, config) {
     .style('opacity', 0.5);
 
   // ===== ACTUALIZAR CÍRCULOS DESTACADOS =====
-  // Círculo de fallecidos (solo si está visible)
-  if (filterState.deaths) {
-    const yDeaths = scales.yLeftScale(punto.deaths_7d);
-    tooltipElements.circleDeaths
-      .attr('cx', xPos)
-      .attr('cy', yDeaths)
-      .style('opacity', 1);
-  } else {
-    tooltipElements.circleDeaths.style('opacity', 0);
-  }
+  const hasSelectedGroups = AGE_GROUPS.some(g => filterState[g]);
+  const generalCircleOpacity = hasSelectedGroups ? 0.3 : 1;
 
-  // Círculo de vacunación (solo si está visible)
-  if (filterState.vaccination) {
-    const yVaccination = scales.yRightScale(punto.vaccinated_pct);
-    tooltipElements.circleVaccination
-      .attr('cx', xPos)
-      .attr('cy', yVaccination)
-      .style('opacity', 1);
-  } else {
-    tooltipElements.circleVaccination.style('opacity', 0);
-  }
+  // Círculo de fallecidos (población general)
+  const yDeaths = scales.yLeftScale(punto.deaths_7d);
+  tooltipElements.circleDeaths
+    .attr('cx', xPos)
+    .attr('cy', yDeaths)
+    .style('opacity', generalCircleOpacity);
+
+  // Círculo de vacunación (población general)
+  const yVaccination = scales.yRightScale(punto.vaccinated_pct);
+  tooltipElements.circleVaccination
+    .attr('cx', xPos)
+    .attr('cy', yVaccination)
+    .style('opacity', generalCircleOpacity);
+
+  // ===== CÍRCULOS PARA GRUPOS SELECCIONADOS =====
+  // Remover círculos de grupos anteriores
+  chartGroup.selectAll('.tooltip-circle-group').remove();
+
+  // Crear círculos para cada grupo seleccionado
+  AGE_GROUPS.forEach(group => {
+    if (filterState[group]) {
+      const color = COLORS.ageGroups[group];
+
+      // Círculo para fallecidos del grupo
+      const yDeathsGroup = scales.yLeftScale(punto[`deaths_${group}`] || 0);
+      chartGroup.append('circle')
+        .attr('class', 'tooltip-circle-group')
+        .attr('cx', xPos)
+        .attr('cy', yDeathsGroup)
+        .attr('r', 4)
+        .style('fill', color)
+        .style('stroke', 'white')
+        .style('stroke-width', 2)
+        .style('opacity', 0.9)
+        .style('pointer-events', 'none');
+
+      // Círculo para vacunación del grupo
+      const yVacGroup = scales.yRightScale(punto[`vaccinated_pct_${group}`] || 0);
+      chartGroup.append('circle')
+        .attr('class', 'tooltip-circle-group')
+        .attr('cx', xPos)
+        .attr('cy', yVacGroup)
+        .attr('r', 4)
+        .style('fill', color)
+        .style('stroke', 'white')
+        .style('stroke-width', 2)
+        .style('opacity', 0.7)
+        .style('pointer-events', 'none');
+    }
+  });
 
   // ===== ACTUALIZAR CONTENIDO DEL TOOLTIP =====
-  const formatoFecha = d3.timeFormat('%d %B %Y');
+  const formatoFecha = d3.timeFormat('%d %b %Y');
   const fechaFormateada = formatoFecha(punto.date);
 
-  tooltipElements.tooltip.select('.tooltip-date')
-    .text(fechaFormateada);
+  const activeGroups = AGE_GROUPS.filter(g => filterState[g]);
+  const hasGroups = activeGroups.length > 0;
 
-  // Mostrar fallecidos solo si el filtro está activo
-  if (filterState.deaths) {
-    tooltipElements.tooltip.select('.tooltip-deaths')
-      .style('display', 'flex')
-      .html(`<span>Fallecidos:</span><span>${Math.round(punto.deaths_7d)}</span>`);
+  // Construir HTML del tooltip de manera compacta
+  let tooltipHTML = `<div style="font-weight: 600; font-size: 11px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #e0e0e0;">${fechaFormateada}</div>`;
+
+  if (!hasGroups) {
+    // Vista simple: solo población general
+    tooltipHTML += `<table style="width: 100%; font-size: 11px; border-collapse: collapse;">`;
+    tooltipHTML += `<tr><td style="padding: 2px 0; color: #666;">Fallecidos:</td><td style="text-align: right; font-weight: 600;">${Math.round(punto.deaths_7d)}</td></tr>`;
+    tooltipHTML += `<tr><td style="padding: 2px 0; color: #666;">Vacunación:</td><td style="text-align: right; font-weight: 600;">${punto.vaccinated_pct.toFixed(1)}%</td></tr>`;
+    tooltipHTML += `</table>`;
   } else {
-    tooltipElements.tooltip.select('.tooltip-deaths')
-      .style('display', 'none');
+    // Vista compacta con tabla para comparar - columnas con anchos fijos
+    tooltipHTML += `<table style="width: 100%; font-size: 10px; border-collapse: collapse; table-layout: fixed;">`;
+
+    // Cabecera de tabla
+    tooltipHTML += `<thead><tr style="border-bottom: 1px solid #e0e0e0;">`;
+    tooltipHTML += `<th style="text-align: left; font-size: 9px; color: #999; font-weight: 500; padding: 0 0 2px 0; width: 50%;">Grupo</th>`;
+    tooltipHTML += `<th style="text-align: right; font-size: 9px; color: #999; font-weight: 500; padding: 0 4px 2px 0; width: 25%;">Fall.</th>`;
+    tooltipHTML += `<th style="text-align: right; font-size: 9px; color: #999; font-weight: 500; padding: 0 0 2px 0; width: 25%;">Vac.</th>`;
+    tooltipHTML += `</tr></thead>`;
+
+    tooltipHTML += `<tbody>`;
+
+    // Población general
+    tooltipHTML += `<tr style="opacity: 0.5; border-bottom: 1px solid #f5f5f5;">`;
+    tooltipHTML += `<td style="padding: 3px 0; color: #666;">General</td>`;
+    tooltipHTML += `<td style="text-align: right; padding: 3px 4px 3px 0;">${Math.round(punto.deaths_7d)}</td>`;
+    tooltipHTML += `<td style="text-align: right; padding: 3px 0;">${punto.vaccinated_pct.toFixed(0)}%</td>`;
+    tooltipHTML += `</tr>`;
+
+    // Grupos seleccionados
+    activeGroups.forEach(group => {
+      const deaths = Math.round(punto[`deaths_${group}`] || 0);
+      const vac = (punto[`vaccinated_pct_${group}`] || 0).toFixed(0);
+      const groupLabel = group === '<=39' ? '≤39' : group === '>=90' ? '≥90' : group;
+      const color = COLORS.ageGroups[group];
+
+      tooltipHTML += `<tr>`;
+      tooltipHTML += `<td style="padding: 3px 0;"><span style="color: ${color}; font-size: 12px;">●</span> ${groupLabel}</td>`;
+      tooltipHTML += `<td style="text-align: right; padding: 3px 4px 3px 0; font-weight: 600;">${deaths}</td>`;
+      tooltipHTML += `<td style="text-align: right; padding: 3px 0; font-weight: 600;">${vac}%</td>`;
+      tooltipHTML += `</tr>`;
+    });
+
+    tooltipHTML += `</tbody></table>`;
   }
 
-  // Mostrar vacunación solo si el filtro está activo
-  if (filterState.vaccination) {
-    tooltipElements.tooltip.select('.tooltip-vaccination')
-      .style('display', 'flex')
-      .html(`<span>Cobertura vacunación:</span><span>${punto.vaccinated_pct.toFixed(1)}%</span>`);
-  } else {
-    tooltipElements.tooltip.select('.tooltip-vaccination')
-      .style('display', 'none');
-  }
+  tooltipElements.tooltip.html(tooltipHTML);
 
   // ===== POSICIONAR TOOLTIP CERCA DEL CURSOR =====
   const containerRect = document.getElementById('chart-container').getBoundingClientRect();
@@ -817,7 +1054,8 @@ function ocultarTooltip() {
   tooltipElements.circleVaccination
     .style('opacity', 0);
 
-  console.log('👻 Tooltip ocultado');
+  // Remover círculos de grupos
+  chartGroup.selectAll('.tooltip-circle-group').remove();
 }
 
 /**
@@ -873,17 +1111,8 @@ function setupTooltip(svg, config) {
   // ===== EVENTOS DE MOUSE =====
   interactionLayer
     .on('mousemove', (event) => actualizarTooltip(event, config))
-    .on('mouseleave', () => {
-      ocultarTooltip();
-      console.log('🚪 Mouse salió del área del gráfico');
-    })
-    .on('click', (event) => {
-      // Click también actualiza tooltip (útil en dispositivos táctiles)
-      actualizarTooltip(event, config);
-      console.log('👆 Click en el gráfico - tooltip actualizado');
-    });
-
-  console.log('✅ Sistema de tooltip (details on demand) inicializado correctamente');
+    .on('mouseleave', () => ocultarTooltip())
+    .on('click', (event) => actualizarTooltip(event, config));
 }
 
 // ===== CONFIGURACIÓN DE ZOOM =====
@@ -910,25 +1139,50 @@ function zoomed(event, config) {
   chartGroup.select('.axis--x').call(xAxis);
 
   // ===== ACTUALIZACIÓN DE LÍNEAS =====
-  // Actualizar línea de fallecidos
-  const deathsLine = d3.line()
+  // 1. Actualizar líneas de población general
+  const deathsLineGeneral = d3.line()
     .x(d => newXScale(d.date))
     .y(d => scales.yLeftScale(d.deaths_7d))
     .curve(d3.curveMonotoneX)
     .defined(d => d.date && !isNaN(d.deaths_7d) && isFinite(d.deaths_7d));
 
-  chartGroup.select('.lines-group .line--deaths')
-    .attr('d', deathsLine(chartData));
+  chartGroup.select('.line--deaths-general')
+    .attr('d', deathsLineGeneral(chartData));
 
-  // Actualizar línea de vacunación
-  const vaccinationLine = d3.line()
+  const vaccinationLineGeneral = d3.line()
     .x(d => newXScale(d.date))
     .y(d => scales.yRightScale(d.vaccinated_pct))
     .curve(d3.curveMonotoneX)
     .defined(d => d.date && !isNaN(d.vaccinated_pct) && isFinite(d.vaccinated_pct));
 
-  chartGroup.select('.lines-group .line--vaccination')
-    .attr('d', vaccinationLine(chartData));
+  chartGroup.select('.line--vaccination-general')
+    .attr('d', vaccinationLineGeneral(chartData));
+
+  // 2. Actualizar líneas de grupos seleccionados
+  AGE_GROUPS.forEach(group => {
+    if (filterState[group]) {
+      // Escapar caracteres especiales para CSS class
+      const groupClass = group.replace(/[<>=]/g, '_');
+
+      const deathsLineGroup = d3.line()
+        .x(d => newXScale(d.date))
+        .y(d => scales.yLeftScale(d[`deaths_${group}`]))
+        .curve(d3.curveMonotoneX)
+        .defined(d => d.date && !isNaN(d[`deaths_${group}`]) && isFinite(d[`deaths_${group}`]));
+
+      chartGroup.select(`.line--deaths-${groupClass}`)
+        .attr('d', deathsLineGroup(chartData));
+
+      const vaccinationLineGroup = d3.line()
+        .x(d => newXScale(d.date))
+        .y(d => scales.yRightScale(d[`vaccinated_pct_${group}`]))
+        .curve(d3.curveMonotoneX)
+        .defined(d => d.date && !isNaN(d[`vaccinated_pct_${group}`]) && isFinite(d[`vaccinated_pct_${group}`]));
+
+      chartGroup.select(`.line--vaccination-${groupClass}`)
+        .attr('d', vaccinationLineGroup(chartData));
+    }
+  });
 
   // ===== ACTUALIZACIÓN DE HITOS (MILESTONES) =====
   const parse = d3.timeParse('%Y-%m-%d');
@@ -937,8 +1191,7 @@ function zoomed(event, config) {
 
   // Recrear grupo de hitos con clip path
   const milestonesGroup = chartGroup.append('g')
-    .attr('class', 'milestones-group')
-    .attr('clip-path', 'url(#chart-clip)');
+    .attr('class', 'milestones-group');
 
   MILESTONES.forEach(milestone => {
     const milestoneDate = parse(milestone.date);
@@ -953,6 +1206,10 @@ function zoomed(event, config) {
         .attr('data-context-label', labelText || '')
         .attr('transform', `translate(${x},0)`);
 
+      const lineGroup = milestoneGroup.append('g')
+        .attr('class', 'milestone-line-group')
+        .attr('clip-path', 'url(#chart-clip)');
+
       // Redibujar líneas de hitos
       const segments = 20;
       const segmentHeight = config.height / segments;
@@ -965,7 +1222,7 @@ function zoomed(event, config) {
         const opacity = 0.4 * (1 - i / segments);
 
         if (opacity > 0.02) {
-          milestoneGroup.append('line')
+          lineGroup.append('line')
             .attr('class', `milestone milestone--${milestone.style}`)
             .attr('x1', 0)
             .attr('x2', 0)
@@ -1017,6 +1274,17 @@ function zoomed(event, config) {
         .attr('stroke', '#666')
         .attr('stroke-width', 1)
         .attr('marker-end', 'url(#milestone-arrow)');
+
+      // Add arrow at the bottom of the vertical line
+      lineGroup.append('line')
+        .attr('x1', 0)
+        .attr('y1', config.height - 15)
+        .attr('x2', 0)
+        .attr('y2', config.height)
+        .attr('stroke', COLORS.milestone[milestone.style])
+        .attr('stroke-width', 1.5)
+        .attr('stroke-opacity', 0.6)
+        .attr('marker-end', 'url(#milestone-arrow-bottom)');
     }
   });
 
@@ -1109,18 +1377,6 @@ function zoomed(event, config) {
     }
   });
 
-  // ===== LOG EN ESPAÑOL =====
-  const dominio = newXScale.domain();
-  const formatoFecha = d3.timeFormat('%d/%m/%Y');
-  console.log('🔍 Zoom actualizado. Fechas visibles:',
-    formatoFecha(dominio[0]), '→', formatoFecha(dominio[1]));
-
-  // ===== MANTENER ESTADO DE FILTROS TRAS ZOOM =====
-  // Aplicar visibilidad de filtros después de redibujar
-  updateSeriesVisibility();
-
-  // ===== ACTUALIZAR REFERENCIAS DE SONIFICACIÓN TRAS ZOOM =====
-  updateSoundReferences(scales, filterState);
 }
 
 /**
@@ -1167,8 +1423,6 @@ function setupZoom(svg, config) {
         .call(zoomBehavior.transform, d3.zoomIdentity);
     });
   }
-
-  console.log('✅ Sistema de zoom/pan inicializado correctamente');
 }
 
 /**
@@ -1188,24 +1442,36 @@ export async function initChart() {
       "shortMonths": ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
     });
     // Load data
-    const rawData = await d3.csv('assets/data_factual.csv');
+    const rawData = await d3.csv('assets/data_age_groups.csv');
 
     // Process data
     chartData = rawData
-      .map(d => ({
-        date: d3.timeParse('%Y-%m-%d')(d.date),
-        deaths_7d: +d.deaths_7d,
-        vaccinated_pct: +d.vaccinated_pct
-      }))
-      .filter(d =>
-        d.date instanceof Date &&
-        typeof d.deaths_7d === 'number' &&
-        typeof d.vaccinated_pct === 'number' &&
-        !isNaN(d.deaths_7d) &&
-        !isNaN(d.vaccinated_pct) &&
-        isFinite(d.deaths_7d) &&
-        isFinite(d.vaccinated_pct)
-      );
+      .map(d => {
+        const row = {
+          date: d3.timeParse('%Y-%m-%d')(d.date),
+          // Población general (siempre presente)
+          deaths_7d: +d.deaths_7d,
+          vaccinated_pct: +d.vaccinated_pct
+        };
+
+        // Agregar fallecidos y vacunación por grupo etario
+        AGE_GROUPS.forEach(group => {
+          row[`deaths_${group}`] = +d[`deaths_${group}`];
+          row[`vaccinated_pct_${group}`] = +d[`vaccinated_pct_${group}`];
+        });
+
+        return row;
+      })
+      .filter(d => {
+        // Verificar que la fecha sea válida
+        if (!(d.date instanceof Date)) return false;
+
+        // Verificar que la población general tenga datos válidos
+        return (
+          typeof d.deaths_7d === 'number' && !isNaN(d.deaths_7d) && isFinite(d.deaths_7d) &&
+          typeof d.vaccinated_pct === 'number' && !isNaN(d.vaccinated_pct) && isFinite(d.vaccinated_pct)
+        );
+      });
 
     if (chartData.length === 0) {
       throw new Error('No valid data found');
@@ -1253,7 +1519,7 @@ export async function initChart() {
     setupTooltip(chartGroup, config);
 
     // ===== CONFIGURAR SONIFICACIÓN =====
-    initSound(chartData, filterState, scales, chartGroup);
+    // TEMPORALMENTE DESACTIVADO: initSound(chartData, filterState, scales, chartGroup);
 
     // Setup responsiveness
     makeResponsive();
