@@ -738,6 +738,7 @@ body {
 .sonification-highlight--vaccination {
   stroke: rgba(31, 119, 180, 0.95);
   filter: drop-shadow(0 0 6px rgba(31, 119, 180, 0.7));
+  animation: sonificationGlowVaccination 1.2s ease-in-out infinite;
 }
 
 @keyframes sonificationGlow {
@@ -748,6 +749,17 @@ body {
   50% {
     stroke-opacity: 1;
     filter: drop-shadow(0 0 12px rgba(255, 82, 82, 0.95));
+  }
+}
+
+@keyframes sonificationGlowVaccination {
+  0%, 100% {
+    stroke-opacity: 0.8;
+    filter: drop-shadow(0 0 5px rgba(31, 119, 180, 0.6));
+  }
+  50% {
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 12px rgba(31, 119, 180, 0.95));
   }
 }
 /* Responsive sound controls */
