@@ -723,6 +723,39 @@ body {
   z-index: 60;
 }
 
+.sound-vaccination-marker {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(31, 119, 180, 0.85) 0%, rgba(31, 119, 180, 0.4) 55%, rgba(31, 119, 180, 0) 75%);
+  border: 2px solid #ffffff;
+  box-shadow: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.9);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+  z-index: 60;
+}
+
+.sound-deaths-marker--pulse {
+  animation: deathsMarkerPulse 0.18s ease-out;
+}
+
+@keyframes deathsMarkerPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 10px rgba(214, 39, 40, 0.4);
+  }
+  40% {
+    transform: translate(-50%, -50%) scale(1.15);
+    box-shadow: 0 0 22px rgba(255, 120, 120, 0.85);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 10px rgba(214, 39, 40, 0.4);
+  }
+}
 
 .sonification-highlight {
   stroke: rgba(255, 70, 70, 0.95);
@@ -730,37 +763,11 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-opacity: 1;
-  filter: drop-shadow(0 0 6px rgba(255, 82, 82, 0.7));
-  animation: sonificationGlow 1.2s ease-in-out infinite;
   pointer-events: none;
 }
 
 .sonification-highlight--vaccination {
   stroke: rgba(31, 119, 180, 0.95);
-  filter: drop-shadow(0 0 6px rgba(31, 119, 180, 0.7));
-  animation: sonificationGlowVaccination 1.2s ease-in-out infinite;
-}
-
-@keyframes sonificationGlow {
-  0%, 100% {
-    stroke-opacity: 0.8;
-    filter: drop-shadow(0 0 5px rgba(255, 82, 82, 0.6));
-  }
-  50% {
-    stroke-opacity: 1;
-    filter: drop-shadow(0 0 12px rgba(255, 82, 82, 0.95));
-  }
-}
-
-@keyframes sonificationGlowVaccination {
-  0%, 100% {
-    stroke-opacity: 0.8;
-    filter: drop-shadow(0 0 5px rgba(31, 119, 180, 0.6));
-  }
-  50% {
-    stroke-opacity: 1;
-    filter: drop-shadow(0 0 12px rgba(31, 119, 180, 0.95));
-  }
 }
 /* Responsive sound controls */
 @media (max-width: 768px) {

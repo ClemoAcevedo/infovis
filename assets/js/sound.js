@@ -5,7 +5,10 @@
 
 // ===== CONFIGURACIÓN DE AUDIO =====
 let audioContext = null;
-let synthDeaths = null;        // Sintetizador para fallecidos (tipo ECG/pulso)
+let heartbeatLowSynth = null;    // Sintetizador grave para el golpe 'lub'
+let heartbeatHighSynth = null;   // Sintetizador agudo para el golpe 'dub'
+let heartbeatCompressor = null;  // Compresor para dar cohesión al latido
+let heartbeatReverb = null;      // Reverb ligera para sensación orgánica
 let isAudioInitialized = false;
 let isMuted = false;
 let isPlaying = false;
@@ -18,7 +21,7 @@ const PLAY_LABEL_DISABLED = '🚫 Solo disponible sin filtros';
 const VACCINATION_COLOR = '#1f77b4';
 
 // ===== ESCALAS DE MAPEO DE DATOS A SONIDO =====
-let escalaMuertes = null;      // Escala: fallecidos → frecuencia (beep de ECG)
+let escalaLatidos = null;      // Escala: fallecidos → BPM aproximado del latido
 
 // ===== REFERENCIAS A ELEMENTOS DEL DOM =====
 let playButton = null;
@@ -31,6 +34,7 @@ let filterState = null;
 let scales = null;
 let chartGroup = null;
 let deathsMarker = null;
+let vaccinationMarker = null;
 let chartContainerElement = null;
 let deathsHighlightPath = null;
 let vaccinationHighlightPath = null;
@@ -146,8 +150,52 @@ function hideDeathsMarker() {
   if (deathsMarker) {
     deathsMarker.style.opacity = '0';
     deathsMarker.style.transform = 'translate(-50%, -50%) scale(0.9)';
+    deathsMarker.classList.remove('sound-deaths-marker--pulse');
   }
   hideHighlightPath();
+}
+
+function triggerDeathsMarkerPulse() {
+  const marker = ensureDeathsMarker();
+  if (!marker) {
+    return;
+  }
+
+  marker.classList.remove('sound-deaths-marker--pulse');
+  // Force reflow so animation can restart on consecutive notes
+  void marker.offsetWidth;
+  marker.classList.add('sound-deaths-marker--pulse');
+}
+
+function playHeartbeat(time = Tone.now(), bpm = 80) {
+  if (!heartbeatLowSynth || !heartbeatHighSynth) {
+    return;
+  }
+
+  const sanitizedBpm = Math.max(40, Math.min(180, bpm || 80));
+  const delay = Math.max(0.1, 0.25 - (sanitizedBpm - 60) / 1000);
+
+  heartbeatLowSynth.triggerAttackRelease('C2', '8n', time); // lub
+  heartbeatHighSynth.triggerAttackRelease('E3', '16n', time + delay); // dub
+}
+
+function ensureVaccinationMarker() {
+  const container = ensureChartContainer();
+  if (container && !vaccinationMarker) {
+    vaccinationMarker = document.createElement('div');
+    vaccinationMarker.className = 'sound-vaccination-marker';
+    vaccinationMarker.style.opacity = '0';
+    vaccinationMarker.style.transform = 'translate(-50%, -50%) scale(0.9)';
+    container.appendChild(vaccinationMarker);
+  }
+  return vaccinationMarker;
+}
+
+function hideVaccinationMarker() {
+  if (vaccinationMarker) {
+    vaccinationMarker.style.opacity = '0';
+    vaccinationMarker.style.transform = 'translate(-50%, -50%) scale(0.9)';
+  }
 }
 
 function hasActiveAgeFilters(state) {
@@ -460,25 +508,30 @@ async function inicializarAudio() {
     await Tone.start();
     console.log('🎵 Contexto de audio iniciado correctamente');
 
-    // ===== SINTETIZADOR TIPO ELECTROCARDIOGRAMA (ECG) =====
-    // Beep corto y agudo similar al monitor de pulso cardíaco
-    synthDeaths = new Tone.MembraneSynth({
-      pitchDecay: 0.008,  // Decay muy rápido para beep corto
-      octaves: 2,
-      oscillator: {
-        type: 'sine'
-      },
-      envelope: {
-        attack: 0.001,    // Ataque instantáneo (beep)
-        decay: 0.1,       // Decay rápido
-        sustain: 0,       // Sin sustain (beep corto)
-        release: 0.05     // Release muy corto
-      },
-      volume: -6  // Volumen alto para claridad del beep
+    // ===== SINTETIZADORES DE LATIDO CARDÍACO =====
+    heartbeatLowSynth = new Tone.MembraneSynth({
+      pitchDecay: 0.08,
+      octaves: 3,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.001, decay: 0.3, sustain: 0 },
     }).toDestination();
 
+    heartbeatHighSynth = new Tone.MembraneSynth({
+      pitchDecay: 0.02,
+      octaves: 2,
+      oscillator: { type: 'triangle' },
+      envelope: { attack: 0.001, decay: 0.2, sustain: 0 },
+    }).toDestination();
+
+    heartbeatReverb = new Tone.Reverb(1.2).toDestination();
+    heartbeatCompressor = new Tone.Compressor(-20, 3).toDestination();
+
+    heartbeatLowSynth.connect(heartbeatCompressor);
+    heartbeatHighSynth.connect(heartbeatCompressor);
+    heartbeatCompressor.connect(heartbeatReverb);
+
     isAudioInitialized = true;
-    console.log('✅ Sintetizador ECG creado: beeps tipo electrocardiograma');
+    console.log('✅ Sintetizadores de latido configurados');
 
   } catch (error) {
     console.error('❌ Error al inicializar audio:', error);
@@ -500,15 +553,14 @@ function configurarEscalas(data) {
   const maxVacunacion = 100; // El porcentaje siempre es 0-100
 
   // ===== MAPEOS DE DATOS A SONIDO =====
-  // Fallecidos: valores más altos → frecuencias más ALTAS (beep más agudo = más muertes)
-  // Sonido tipo ECG: frecuencia determina el tono del beep
-  escalaMuertes = d3.scaleLinear()
+  // Fallecidos: valores más altos → latidos más rápidos
+  escalaLatidos = d3.scaleLinear()
     .domain([0, maxFallecidos])
-    .range([150, 600])  // Rango amplio: pocas muertes = beep grave, muchas = beep muy agudo
+    .range([60, 140])  // BPM aproximado: menos muertes = pulso lento, más muertes = pulso acelerado
     .clamp(true);
 
-  console.log('🎼 Escala de sonificación tipo ECG configurada:');
-  console.log(`   - Fallecidos: ${maxFallecidos} max → 150-600 Hz (beep tipo electrocardiograma)`);
+  console.log('🎼 Escala de sonificación tipo latido configurada:');
+  console.log(`   - Fallecidos: ${maxFallecidos} max → 60-140 BPM (ritmo cardíaco aproximado)`);
 }
 
 /**
@@ -524,13 +576,11 @@ function reproducirPunto(punto, duracion = 0.08) {
   // Solo reproducir si hay datos válidos de fallecidos y la serie está habilitada
   const deathsEnabled = !filterState || filterState.deaths !== false;
   if (deathsEnabled && punto.deaths_7d != null && Number.isFinite(punto.deaths_7d)) {
-    const frecuenciaBeep = escalaMuertes(punto.deaths_7d);
+    const bpmObjetivo = escalaLatidos ? escalaLatidos(punto.deaths_7d) : 80;
+    playHeartbeat(undefined, bpmObjetivo);
+    triggerDeathsMarkerPulse();
 
-    // MembraneSynth usa triggerAttackRelease con la frecuencia como nota
-    // El beep será corto e intenso, tipo ECG
-    synthDeaths.triggerAttackRelease(frecuenciaBeep, duracion);
-
-    console.log(`💓 Beep ECG: ${Math.round(punto.deaths_7d)} fallecidos → ${Math.round(frecuenciaBeep)} Hz`);
+    console.log(`💓 Latido: ${Math.round(punto.deaths_7d)} fallecidos → ${Math.round(bpmObjetivo)} BPM`);
   }
 }
 
@@ -593,8 +643,10 @@ async function reproducirSonificacion() {
   ensureHighlightPath();
   ensureVaccinationHighlightPath();
   ensureDeathsMarker();
+  ensureVaccinationMarker();
   hideHighlightPath();
   hideDeathsMarker();
+  hideVaccinationMarker();
   refreshContextElements();
   resetContextElementsForPlayback();
   lastPlaybackDate = null;
@@ -662,6 +714,7 @@ function detenerReproduccion() {
   setVaccinationLineDimmed(false);
   hideHighlightPath();
   hideDeathsMarker();
+  hideVaccinationMarker();
   restoreContextElementsVisibility();
   lastPlaybackDate = null;
 
@@ -803,6 +856,19 @@ function actualizarIndicadorProgreso(punto) {
       hideDeathsMarker();
     }
   }
+
+  if (vaccinationMarker) {
+    if (punto.vaccinated_pct != null && isFinite(punto.vaccinated_pct)) {
+      const yPosVaccination = scales.yRightScale(punto.vaccinated_pct);
+      const vaccinationPoint = projectPoint(clampedX, yPosVaccination);
+      vaccinationMarker.style.left = `${vaccinationPoint.left}px`;
+      vaccinationMarker.style.top = `${vaccinationPoint.top}px`;
+      vaccinationMarker.style.opacity = '1';
+      vaccinationMarker.style.transform = 'translate(-50%, -50%) scale(1)';
+    } else {
+      hideVaccinationMarker();
+    }
+  }
 }
 
 /**
@@ -835,12 +901,8 @@ function toggleMute() {
  * @param {Object} punto - Punto de datos bajo el cursor
  */
 export function onHoverPoint(punto) {
-  if (!isAudioInitialized || isPlaying) {
-    return; // No reproducir durante playback automático
-  }
-
-  // Reproducir sonido corto (ping)
-  reproducirPunto(punto, 0.08);
+  // Hover silencioso: evitar reproducir sonido cuando el usuario explora con el mouse
+  return;
 }
 
 /**
@@ -853,6 +915,7 @@ export function cleanupSound() {
 
   hideHighlightPath();
   hideDeathsMarker();
+  hideVaccinationMarker();
   restoreContextElementsVisibility();
   lastPlaybackDate = null;
   setDeathsLineDimmed(false);
@@ -882,6 +945,7 @@ export function initSound(data, filters, chartScales, svg, options = {}) {
   ensureHighlightPath();
   ensureVaccinationHighlightPath();
   ensureDeathsMarker();
+  ensureVaccinationMarker();
   centerOnDateCallback = typeof options.centerOnDate === 'function' ? options.centerOnDate : centerOnDateCallback;
   refreshContextElements();
 
@@ -938,6 +1002,7 @@ export function updateSoundReferences(chartScales, filters, svgGroup = null, opt
   ensureHighlightPath();
   ensureVaccinationHighlightPath();
   ensureDeathsMarker();
+  ensureVaccinationMarker();
   refreshContextElements();
   setDeathsLineDimmed(isPlaying);
   setVaccinationLineDimmed(isPlaying);
@@ -948,6 +1013,7 @@ export function updateSoundReferences(chartScales, filters, svgGroup = null, opt
 
   if (!isPlaying) {
     hideDeathsMarker();
+    hideVaccinationMarker();
   }
 
   updatePlaybackAvailability();
