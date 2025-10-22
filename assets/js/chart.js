@@ -13,7 +13,7 @@ import {
   debounce,
   validateData
 } from './utils.js';
-import { initSound, onHoverPoint, updateSoundReferences, cleanupSound } from './sound.js';
+import { initSound, onHoverPoint, updateSoundReferences, cleanupSound, isSonificationPlaying } from './sound.js';
 
 // Global chart state
 let chartSvg, chartGroup, scales, chartData;
@@ -465,7 +465,9 @@ export function addDirectLabels(svg, data, scales, config) {
 
   if (lastDataPoint) {
     // Deaths line label - position in top left corner
-    const deathsLabelGroup = svg.append('g').attr('class', 'direct-label deaths-label');
+    const deathsLabelGroup = svg.append('g')
+      .attr('class', 'direct-label deaths-label contextual-element')
+      .attr('data-context-type', 'direct-label');
 
     deathsLabelGroup.append('text')
       .attr('x', 5) // Position at the left edge with small padding
@@ -480,7 +482,9 @@ export function addDirectLabels(svg, data, scales, config) {
 
     // Vaccination line label - position below the line
     const vaccinationY = yRightScale(lastDataPoint.vaccinated_pct);
-    const vaccinationLabelGroup = svg.append('g').attr('class', 'direct-label vaccination-label');
+    const vaccinationLabelGroup = svg.append('g')
+      .attr('class', 'direct-label vaccination-label contextual-element')
+      .attr('data-context-type', 'direct-label');
 
     vaccinationLabelGroup.append('text')
       .attr('x', labelX)
@@ -829,6 +833,26 @@ function setupFilters() {
       });
     }
   });
+
+  // ===== BOTÓN DE RESETEAR FILTROS =====
+  const resetBtn = document.getElementById('filter-reset-btn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      // Desmarcar todos los checkboxes
+      Object.entries(FILTER_ID_TO_GROUP).forEach(([filterId, group]) => {
+        const checkbox = document.getElementById(filterId);
+        if (checkbox) {
+          checkbox.checked = false;
+          filterState[group] = false;
+        }
+      });
+
+      // Actualizar la visualización
+      updateSeriesVisibility();
+
+      console.log('🔄 Filtros reseteados');
+    });
+  }
 }
 
 // ===== CONFIGURACIÓN DE TOOLTIP (DETAILS ON DEMAND) =====
@@ -855,6 +879,13 @@ function encontrarPuntoCercano(fecha) {
  * @param {Object} config - Configuración del gráfico
  */
 function actualizarTooltip(event, config) {
+  // ===== VERIFICAR SI LA SONIFICACIÓN ESTÁ ACTIVA =====
+  // Si la sonificación está en reproducción, no mostrar tooltip
+  if (isSonificationPlaying()) {
+    ocultarTooltip();
+    return;
+  }
+
   // ===== OBTENER COORDENADAS DEL MOUSE =====
   const [mouseX] = d3.pointer(event, chartGroup.node());
 

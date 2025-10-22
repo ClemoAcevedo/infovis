@@ -10,14 +10,13 @@ let heartbeatHighSynth = null;   // Sintetizador agudo para el golpe 'dub'
 let heartbeatCompressor = null;  // Compresor para dar cohesión al latido
 let heartbeatReverb = null;      // Reverb ligera para sensación orgánica
 let isAudioInitialized = false;
-let isMuted = false;
 let isPlaying = false;
 let playbackInterval = null;
 let playbackStartDate = null;
 
-const PLAY_LABEL_DEFAULT = '▶️ Reproducir Sonificación';
-const PLAY_LABEL_STOP = '⏸️ Detener';
-const PLAY_LABEL_DISABLED = '🚫 Solo disponible sin filtros';
+const PLAY_LABEL_DEFAULT = '▶ Sonificación';
+const PLAY_LABEL_STOP = '⏸ Detener';
+const PLAY_LABEL_DISABLED = '✕ Solo sin filtros';
 const VACCINATION_COLOR = '#1f77b4';
 
 // ===== ESCALAS DE MAPEO DE DATOS A SONIDO =====
@@ -25,7 +24,6 @@ let escalaLatidos = null;      // Escala: fallecidos → BPM aproximado del lati
 
 // ===== REFERENCIAS A ELEMENTOS DEL DOM =====
 let playButton = null;
-let muteButton = null;
 let progressIndicator = null;
 
 // ===== ESTADO GLOBAL DEL CHART (se importará desde chart.js) =====
@@ -75,7 +73,7 @@ function ensureHighlightPath() {
       .attr('class', 'sonification-highlight')
       .attr('fill', 'none')
       .attr('stroke', '#ff5f5f')
-      .attr('stroke-width', 3)
+      .attr('stroke-width', 1.8)
       .attr('stroke-linecap', 'round')
       .attr('stroke-linejoin', 'round')
       .style('opacity', 0)
@@ -102,7 +100,7 @@ function ensureVaccinationHighlightPath() {
       .attr('class', 'sonification-highlight sonification-highlight--vaccination')
       .attr('fill', 'none')
       .attr('stroke', VACCINATION_COLOR)
-      .attr('stroke-width', 3)
+      .attr('stroke-width', 1.8)
       .attr('stroke-linecap', 'round')
       .attr('stroke-linejoin', 'round')
       .style('opacity', 0)
@@ -185,7 +183,7 @@ function ensureVaccinationMarker() {
     vaccinationMarker = document.createElement('div');
     vaccinationMarker.className = 'sound-vaccination-marker';
     vaccinationMarker.style.opacity = '0';
-    vaccinationMarker.style.transform = 'translate(-50%, -50%) scale(0.9)';
+    vaccinationMarker.style.transform = 'translate(-50%, -50%) scale(1)';
     container.appendChild(vaccinationMarker);
   }
   return vaccinationMarker;
@@ -194,7 +192,7 @@ function ensureVaccinationMarker() {
 function hideVaccinationMarker() {
   if (vaccinationMarker) {
     vaccinationMarker.style.opacity = '0';
-    vaccinationMarker.style.transform = 'translate(-50%, -50%) scale(0.9)';
+    vaccinationMarker.style.transform = 'translate(-50%, -50%) scale(1)';
   }
 }
 
@@ -569,7 +567,7 @@ function configurarEscalas(data) {
  * @param {Number} duracion - Duración del beep en segundos (default muy corto para ECG)
  */
 function reproducirPunto(punto, duracion = 0.08) {
-  if (!isAudioInitialized || isMuted || !punto) {
+  if (!isAudioInitialized || !punto) {
     return;
   }
 
@@ -871,29 +869,6 @@ function actualizarIndicadorProgreso(punto) {
   }
 }
 
-/**
- * Alterna el estado de silencio
- */
-function toggleMute() {
-  isMuted = !isMuted;
-
-  if (muteButton) {
-    if (isMuted) {
-      muteButton.textContent = '🔊 Activar';
-      muteButton.classList.add('muted');
-      console.log('🔇 Audio silenciado');
-    } else {
-      muteButton.textContent = '🔇 Silenciar';
-      muteButton.classList.remove('muted');
-      console.log('🔊 Audio activado');
-    }
-  }
-
-  // Si está reproduciendo y se silencia, detener
-  if (isMuted && isPlaying) {
-    detenerReproduccion();
-  }
-}
 
 /**
  * Maneja el evento de hover en el tooltip
@@ -903,6 +878,14 @@ function toggleMute() {
 export function onHoverPoint(punto) {
   // Hover silencioso: evitar reproducir sonido cuando el usuario explora con el mouse
   return;
+}
+
+/**
+ * Verifica si la sonificación está activa
+ * @returns {boolean} true si la sonificación está en reproducción
+ */
+export function isSonificationPlaying() {
+  return isPlaying;
 }
 
 /**
@@ -954,7 +937,6 @@ export function initSound(data, filters, chartScales, svg, options = {}) {
 
   // Obtener referencias a elementos del DOM
   playButton = document.getElementById('sound-play-btn');
-  muteButton = document.getElementById('sound-mute-btn');
   progressIndicator = document.getElementById('sound-progress');
 
   // ===== EVENTOS DE BOTONES =====
@@ -963,13 +945,6 @@ export function initSound(data, filters, chartScales, svg, options = {}) {
       await reproducirSonificacion();
     });
     console.log('✅ Botón de reproducción configurado');
-  }
-
-  if (muteButton) {
-    muteButton.addEventListener('click', () => {
-      toggleMute();
-    });
-    console.log('✅ Botón de silencio configurado');
   }
 
   updatePlaybackAvailability();
