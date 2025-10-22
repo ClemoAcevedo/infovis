@@ -31,6 +31,65 @@ body {
   box-sizing: border-box;
 }
 
+/* Narrative container - Botón de narrativa en lado izquierdo */
+.narrative-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 20%;
+  left: 110px;
+  transform: translateY(-50%);
+  z-index: 200;
+  gap: 6px;
+}
+
+.narrative-btn {
+  font-size: 11px;
+  padding: 5px 12px;
+  background: transparent;
+  color: #888;
+  border: 0.5px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 400;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.zoom-helper {
+  font-size: 9px;
+  color: #aaa;
+  text-align: center;
+  font-family: inherit;
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+#zoom-percentage {
+  font-weight: 500;
+  color: #999;
+}
+
+.narrative-btn:hover {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: #ccc;
+  color: #666;
+}
+
+.narrative-btn:active {
+  background: rgba(0, 0, 0, 0.05);
+  transform: scale(0.98);
+}
+
+.narrative-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 /* Controls container - Contenedor general para sonificación y filtros */
 .controls-container {
   display: flex;
@@ -90,6 +149,18 @@ body {
   letter-spacing: 0.2px;
 }
 
+.filter-toggle.locked {
+  border-color: #e4e4e4;
+  color: #bbb;
+  cursor: not-allowed;
+  background: #fafafa;
+}
+
+.filter-toggle.locked .filter-toggle-icon,
+.filter-toggle.locked .filter-toggle-arrow {
+  opacity: 0.3;
+}
+
 .filter-toggle-arrow {
   font-size: 8px;
   transition: transform 0.15s ease;
@@ -136,6 +207,10 @@ body {
   overflow-y: auto;
 }
 
+.filter-dropdown.locked {
+  pointer-events: none;
+}
+
 .filter-checkboxes {
   display: flex;
   flex-direction: column;
@@ -171,6 +246,12 @@ body {
   background: #f0f0f0;
 }
 
+.filter-reset-btn.locked,
+.filter-reset-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
 .filter-checkbox {
   position: relative;
   display: inline-flex;
@@ -178,6 +259,10 @@ body {
   justify-content: flex-start;
   cursor: pointer;
   user-select: none;
+}
+
+.filter-checkbox.locked {
+  cursor: not-allowed;
 }
 
 /* Ocultar checkbox nativo completamente */
@@ -205,65 +290,70 @@ body {
   width: 100%;
 }
 
+.filter-checkbox.locked .checkbox-label {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Hover state */
 .filter-checkbox:hover .checkbox-label {
   border-color: #d0d0d0;
   color: #999;
 }
 
-/* Checked state - ultra sutiles con colores de grupo */
+/* Checked state - colores colorblind-safe (paleta Paul Tol) */
 #filter-age-0-39:checked + .checkbox-label {
-  background: #4ECDC4;
-  border-color: #4ECDC4;
+  background: #4477AA;
+  border-color: #4477AA;
   color: white;
   font-weight: 500;
   border-width: 1px;
 }
 
 #filter-age-40-49:checked + .checkbox-label {
-  background: #45B7D1;
-  border-color: #45B7D1;
+  background: #66CCEE;
+  border-color: #66CCEE;
   color: white;
   font-weight: 500;
   border-width: 1px;
 }
 
 #filter-age-50-59:checked + .checkbox-label {
-  background: #5B8C5A;
-  border-color: #5B8C5A;
+  background: #228833;
+  border-color: #228833;
   color: white;
   font-weight: 500;
   border-width: 1px;
 }
 
 #filter-age-60-69:checked + .checkbox-label {
-  background: #F4A259;
-  border-color: #F4A259;
-  color: white;
+  background: #CCBB44;
+  border-color: #CCBB44;
+  color: #333; /* Texto oscuro para mejor contraste en amarillo */
   font-weight: 500;
   border-width: 1px;
 }
 
 #filter-age-70-79:checked + .checkbox-label {
-  background: #E76F51;
-  border-color: #E76F51;
+  background: #EE6677;
+  border-color: #EE6677;
   color: white;
   font-weight: 500;
   border-width: 1px;
 }
 
 #filter-age-80-89:checked + .checkbox-label {
-  background: #D62828;
-  border-color: #D62828;
+  background: #AA3377;
+  border-color: #AA3377;
   color: white;
   font-weight: 500;
   border-width: 1px;
 }
 
 #filter-age-90-plus:checked + .checkbox-label {
-  background: #8B0000;
-  border-color: #8B0000;
-  color: white;
+  background: #BBBBBB;
+  border-color: #BBBBBB;
+  color: #333; /* Texto oscuro para mejor contraste en gris */
   font-weight: 500;
   border-width: 1px;
 }
@@ -444,11 +534,42 @@ body {
   opacity: 1;
   transition: opacity 0.35s ease;
   will-change: opacity;
+  pointer-events: none; /* No se pueden tocar - solo visuales */
 }
 
 .contextual-element.contextual-hidden {
   opacity: 0;
   pointer-events: none;
+}
+
+/* Animación de revelación para eventos durante sonificación */
+/* NO usa transform para evitar conflictos con SVG positioning */
+@keyframes contextual-reveal {
+  0% {
+    opacity: 0;
+    filter: drop-shadow(0 0 0px rgba(255, 200, 0, 0)) brightness(1);
+  }
+  30% {
+    opacity: 0.6;
+    filter: drop-shadow(0 0 12px rgba(255, 200, 0, 0.8)) drop-shadow(0 0 20px rgba(255, 200, 0, 0.4)) brightness(1.3);
+  }
+  60% {
+    opacity: 1;
+    filter: drop-shadow(0 0 10px rgba(255, 200, 0, 0.7)) drop-shadow(0 0 18px rgba(255, 200, 0, 0.35)) brightness(1.25);
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+.contextual-element--revealing {
+  animation: contextual-reveal 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.contextual-element--revealing text {
+  font-weight: 600;
+  transition: font-weight 0.1s;
 }
 
 /* Milestones */
@@ -559,6 +680,21 @@ body {
     font-size: 10px;
   }
 
+  .narrative-container {
+    top: 14px;
+    left: 16px;
+    transform: none;
+  }
+
+  .narrative-btn {
+    font-size: 10px;
+    padding: 4px 10px;
+  }
+
+  .zoom-helper {
+    font-size: 8px;
+  }
+
   .controls-container {
     top: 14px;
     right: 16px;
@@ -618,6 +754,20 @@ body {
 
   .caption {
     font-size: 11px;
+  }
+
+  .narrative-container {
+    top: 10px;
+    left: 10px;
+  }
+
+  .narrative-btn {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  .zoom-helper {
+    font-size: 7px;
   }
 
   .controls-container {

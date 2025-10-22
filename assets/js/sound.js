@@ -3,6 +3,8 @@
  * Convierte valores cuantitativos en feedback auditivo
  */
 
+import { resetZoom, zoomToNarrativeStart, setFiltersLocked } from './chart.js';
+
 // ===== CONFIGURACIÓN DE AUDIO =====
 let audioContext = null;
 let heartbeatLowSynth = null;    // Sintetizador grave para el golpe 'lub'
@@ -13,11 +15,17 @@ let isAudioInitialized = false;
 let isPlaying = false;
 let playbackInterval = null;
 let playbackStartDate = null;
+let currentBpm = 60; // BPM actual para suavizado de transiciones
 
 const PLAY_LABEL_DEFAULT = '▶ Sonificación';
 const PLAY_LABEL_STOP = '⏸ Detener';
 const PLAY_LABEL_DISABLED = '✕ Solo sin filtros';
+const NARRATIVE_LABEL_DEFAULT = '📖 Narrativa';
+const NARRATIVE_LABEL_STOP = '⏸ Detener';
+const NARRATIVE_LABEL_DISABLED = '✕ Solo sin filtros';
 const VACCINATION_COLOR = '#1f77b4';
+const MAX_PLAYBACK_DURATION_SECONDS = 60; // Duración máxima de la reproducción en segundos
+const SMOOTHING_WINDOW = 7; // Ventana para media móvil (debe ser impar)
 
 // ===== ESCALAS DE MAPEO DE DATOS A SONIDO =====
 let escalaLatidos = null;      // Escala: fallecidos → BPM aproximado del latido
@@ -33,6 +41,8 @@ let scales = null;
 let chartGroup = null;
 let deathsMarker = null;
 let vaccinationMarker = null;
+let isNarrativeMode = false; // Flag para modo narrativa
+let isNarrativePlaybackActive = false; // Flag para saber si la narrativa inició la reproducción
 let chartContainerElement = null;
 let deathsHighlightPath = null;
 let vaccinationHighlightPath = null;
@@ -165,13 +175,191 @@ function triggerDeathsMarkerPulse() {
   marker.classList.add('sound-deaths-marker--pulse');
 }
 
+/**
+ * Calcula la variabilidad (importancia narrativa) de un segmento de datos
+ * Combina desviación estándar con rango para capturar tanto variabilidad como picos
+ * @param {Array} segment - Segmento de datos
+ * @returns {Number} Puntuación de variabilidad
+ */
+function calcularVariabilidad(segment) {
+  if (!segment || segment.length < 2) {
+    return 0;
+  }
+
+  const values = segment.map(p => p.deaths_7d || 0).filter(v => isFinite(v));
+  if (values.length < 2) {
+    return 0;
+  }
+
+  // Calcular media
+  const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+
+  // Calcular desviación estándar (qué tan dispersos están los valores)
+  const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+  const stdDev = Math.sqrt(variance);
+
+  // Calcular rango (diferencia entre máximo y mínimo)
+  const range = Math.max(...values) - Math.min(...values);
+
+  // Combinar ambas métricas enfatizando MUCHO MÁS los cambios bruscos (range)
+  // range captura picos dramáticos, que son los momentos más importantes de la narrativa
+  return stdDev * 0.3 + range * 0.7;
+}
+
+/**
+ * Procesa los datos para sonificación con distribución inteligente del tiempo:
+ * - Tramos con poca variación → menos puntos (pasar rápido)
+ * - Tramos con mucha variación → más puntos (apreciar cambios dramáticos)
+ * @param {Array} data - Datos originales visibles
+ * @returns {Array} Datos procesados para sonificación
+ */
+function prepararDatosParaSonido(data) {
+  if (!data || data.length === 0) {
+    return [];
+  }
+
+  // 1. Aplicar media móvil para suavizar la curva
+  const halfWindow = Math.floor(SMOOTHING_WINDOW / 2);
+  const smoothedData = data.map((punto, i) => {
+    const start = Math.max(0, i - halfWindow);
+    const end = Math.min(data.length, i + halfWindow + 1);
+    const window = data.slice(start, end);
+
+    const avgDeaths = window.reduce((sum, p) => sum + (p.deaths_7d || 0), 0) / window.length;
+
+    return {
+      ...punto,
+      deaths_7d_smooth: avgDeaths,
+      deaths_7d_original: punto.deaths_7d
+    };
+  });
+
+  // 2. Dividir en segmentos para analizar variabilidad
+  const numSegments = Math.min(20, Math.floor(smoothedData.length / 5)); // ~20 segmentos
+  const segmentSize = Math.floor(smoothedData.length / numSegments);
+  const segments = [];
+
+  for (let i = 0; i < numSegments; i++) {
+    const start = i * segmentSize;
+    const end = i === numSegments - 1 ? smoothedData.length : (i + 1) * segmentSize;
+    const segment = smoothedData.slice(start, end);
+    const variabilidad = calcularVariabilidad(segment);
+
+    segments.push({
+      start,
+      end,
+      data: segment,
+      variabilidad,
+      puntos: 0  // Se calculará después
+    });
+  }
+
+  // 3. Calcular puntos a asignar a cada segmento basado en variabilidad
+  const targetPoints = 120; // ~60 segundos con BPM promedio ~120
+  const totalVariabilidad = segments.reduce((sum, s) => sum + s.variabilidad, 0);
+
+  // Asignar puntos proporcionalmente a la variabilidad AMPLIFICADA
+  // Usar escala power para que segmentos muy variables reciban MUCHO más tiempo
+  let puntosAsignados = 0;
+  const minPuntosPorSegmento = 2; // Mínimo aumentado para 60 segundos
+
+  segments.forEach(seg => {
+    if (totalVariabilidad === 0) {
+      // Si no hay variabilidad, distribuir uniformemente
+      seg.puntos = Math.floor(targetPoints / numSegments);
+    } else {
+      // Calcular proporción y AMPLIFICARLA con power (exponente 1.5)
+      // Esto hace que segmentos con 2x variabilidad reciban ~2.8x puntos
+      const proporcion = seg.variabilidad / totalVariabilidad;
+      const proporcionAmplificada = Math.pow(proporcion, 0.7); // Exponente < 1 amplifica diferencias
+
+      // Normalizar para que la suma sea 1
+      const sumaProporciones = segments.reduce((sum, s) =>
+        sum + Math.pow(s.variabilidad / totalVariabilidad, 0.7), 0);
+
+      const proporcionNormalizada = proporcionAmplificada / sumaProporciones;
+      seg.puntos = Math.max(minPuntosPorSegmento, Math.floor(targetPoints * proporcionNormalizada));
+    }
+    puntosAsignados += seg.puntos;
+  });
+
+  // Ajustar si nos pasamos o faltamos puntos
+  const diferencia = targetPoints - puntosAsignados;
+  if (diferencia !== 0 && segments.length > 0) {
+    // Dar puntos extra al segmento con mayor variabilidad
+    // IMPORTANTE: Encontrar el índice sin reordenar el array
+    let maxVariabilidadIdx = 0;
+    let maxVariabilidad = segments[0].variabilidad;
+
+    for (let i = 1; i < segments.length; i++) {
+      if (segments[i].variabilidad > maxVariabilidad) {
+        maxVariabilidad = segments[i].variabilidad;
+        maxVariabilidadIdx = i;
+      }
+    }
+
+    segments[maxVariabilidadIdx].puntos += diferencia;
+  }
+
+  // 4. Extraer puntos de cada segmento según su asignación
+  // MANTENER ORDEN CRONOLÓGICO: iterar en el orden original de los segmentos
+  const reducedData = [];
+
+  segments.forEach(seg => {
+    if (seg.puntos <= 0 || seg.data.length === 0) {
+      return;
+    }
+
+    const step = seg.data.length / seg.puntos;
+
+    for (let i = 0; i < seg.puntos; i++) {
+      const index = Math.floor(i * step);
+      if (index < seg.data.length) {
+        reducedData.push(seg.data[index]);
+      }
+    }
+  });
+
+  console.log(`🎵 Dataset procesado con distribución inteligente:`);
+  console.log(`   ${data.length} → ${reducedData.length} puntos en ~60 segundos`);
+  console.log(`   Segmentos analizados: ${numSegments}`);
+
+  // Logging detallado de asignación
+  const highVariability = segments.filter(s => s.variabilidad > totalVariabilidad / numSegments).length;
+  console.log(`   Segmentos de alta variabilidad: ${highVariability}/${numSegments} (más tiempo dedicado)`);
+
+  // Mostrar los 3 segmentos con más puntos asignados
+  const topSegments = [...segments].sort((a, b) => b.puntos - a.puntos).slice(0, 3);
+  console.log(`   Top 3 segmentos con más detalle:`);
+  topSegments.forEach((seg, i) => {
+    const avgDeaths = seg.data.reduce((sum, p) => sum + (p.deaths_7d || 0), 0) / seg.data.length;
+    console.log(`     ${i + 1}. ${seg.puntos} puntos - variabilidad: ${seg.variabilidad.toFixed(1)} - promedio: ${avgDeaths.toFixed(0)} muertes`);
+  });
+
+  return reducedData;
+}
+
+/**
+ * Suaviza el BPM objetivo usando media móvil exponencial (EMA)
+ * para transiciones graduales entre valores
+ * @param {Number} targetBpm - BPM objetivo basado en los datos
+ * @returns {Number} BPM suavizado
+ */
+function smoothBpm(targetBpm) {
+  const alpha = 0.55; // Factor más reactivo para capturar mejor los cambios bruscos
+  currentBpm = alpha * targetBpm + (1 - alpha) * currentBpm;
+  return currentBpm;
+}
+
 function playHeartbeat(time = Tone.now(), bpm = 80) {
   if (!heartbeatLowSynth || !heartbeatHighSynth) {
     return;
   }
 
   const sanitizedBpm = Math.max(40, Math.min(180, bpm || 80));
-  const delay = Math.max(0.1, 0.25 - (sanitizedBpm - 60) / 1000);
+  // Delay entre lub-dub: más corto en BPM altos (corazón acelerado)
+  // Varía de ~0.18s (BPM bajo) a ~0.08s (BPM alto)
+  const delay = Math.max(0.08, 0.25 - (sanitizedBpm - 40) / 600);
 
   heartbeatLowSynth.triggerAttackRelease('C2', '8n', time); // lub
   heartbeatHighSynth.triggerAttackRelease('E3', '16n', time + delay); // dub
@@ -233,6 +421,7 @@ function updatePlaybackAvailability() {
     return;
   }
 
+  // Actualizar botón de Sonificación
   if (comparisonActive) {
     setPlayButtonState({
       label: PLAY_LABEL_DISABLED,
@@ -243,15 +432,41 @@ function updatePlaybackAvailability() {
     if (progressIndicator) {
       progressIndicator.style.display = 'none';
     }
-
-    return;
+  } else if (isNarrativePlaybackActive) {
+    // Si la narrativa está activa, deshabilitar el botón de sonificación
+    setPlayButtonState({
+      label: PLAY_LABEL_DEFAULT,
+      disabled: true,
+      playing: false
+    });
+  } else {
+    // Comportamiento normal: mostrar play/stop según estado
+    setPlayButtonState({
+      label: isPlaying ? PLAY_LABEL_STOP : PLAY_LABEL_DEFAULT,
+      disabled: false,
+      playing: isPlaying
+    });
   }
 
-  setPlayButtonState({
-    label: isPlaying ? PLAY_LABEL_STOP : PLAY_LABEL_DEFAULT,
-    disabled: false,
-    playing: isPlaying
-  });
+  // Actualizar botón de Narrativa
+  const narrativeButton = document.getElementById('narrative-btn');
+  if (narrativeButton) {
+    if (comparisonActive) {
+      narrativeButton.disabled = true;
+      narrativeButton.classList.add('disabled');
+      narrativeButton.textContent = NARRATIVE_LABEL_DISABLED;
+    } else if (isPlaying && !isNarrativePlaybackActive) {
+      // Si la sonificación está activa, deshabilitar el botón de narrativa
+      narrativeButton.disabled = true;
+      narrativeButton.classList.add('disabled');
+      narrativeButton.textContent = NARRATIVE_LABEL_DEFAULT;
+    } else {
+      // Comportamiento normal: mostrar narrativa/detener según estado
+      narrativeButton.disabled = false;
+      narrativeButton.classList.remove('disabled');
+      narrativeButton.textContent = isNarrativePlaybackActive ? NARRATIVE_LABEL_STOP : NARRATIVE_LABEL_DEFAULT;
+    }
+  }
 }
 
 function getContextDateParser() {
@@ -279,16 +494,30 @@ function refreshContextElements() {
     return;
   }
 
+  // Guardar el estado revealed actual para no perderlo
+  const previousRevealedState = new Map();
+  contextElements.forEach(item => {
+    const dateKey = item.date ? item.date.getTime() : 'no-date';
+    previousRevealedState.set(dateKey, item.revealed);
+  });
+
   const nodes = chartGroup.selectAll('.contextual-element').nodes();
   contextElements = nodes.map(node => {
     const dateAttr = node.getAttribute('data-context-date') || '';
     const labelAttr = node.getAttribute('data-context-label') || '';
     const parsedDate = parseContextDateString(dateAttr);
+    const dateKey = parsedDate ? parsedDate.getTime() : 'no-date';
+
+    // Mantener el estado revealed previo si existe, sino calcular nuevo
+    const wasRevealed = previousRevealedState.has(dateKey)
+      ? previousRevealedState.get(dateKey)
+      : (!(parsedDate instanceof Date) || !isPlaying);
+
     return {
       element: node,
       date: parsedDate,
       label: labelAttr,
-      revealed: !(parsedDate instanceof Date) || !isPlaying
+      revealed: wasRevealed
     };
   });
 
@@ -301,20 +530,16 @@ function refreshContextElements() {
     return 0;
   });
 
+  // Solo resetear el estado si NO estamos reproduciendo
   if (isPlaying) {
+    // NO resetear revealed, solo aplicar clases según el estado actual
     contextElements.forEach(item => {
-      if (item.date instanceof Date) {
-        item.revealed = false;
-        item.element.classList.add('contextual-hidden');
-      } else {
-        item.revealed = true;
+      if (item.revealed) {
         item.element.classList.remove('contextual-hidden');
+      } else {
+        item.element.classList.add('contextual-hidden');
       }
     });
-
-    if (lastPlaybackDate) {
-      revealContextElementsUpToDate(lastPlaybackDate, true);
-    }
   } else {
     contextElements.forEach(item => {
       item.revealed = true;
@@ -331,6 +556,9 @@ function resetContextElementsForPlayback() {
   }
 
   contextElements.forEach(item => {
+    // Limpiar animaciones residuales
+    item.element.classList.remove('contextual-element--revealing');
+
     if (item.date instanceof Date) {
       item.revealed = false;
       item.element.classList.add('contextual-hidden');
@@ -347,13 +575,26 @@ function revealContextElementsUpToDate(targetDate, silent = false) {
   }
 
   contextElements.forEach(item => {
+    // Si no tiene fecha o ya fue revelado, saltar
     if (!item.date || item.revealed) {
       return;
     }
 
+    // Solo revelar si la fecha del elemento ya pasó
     if (item.date <= targetDate) {
+      // Marcar como revelado ANTES de agregar animación
       item.revealed = true;
       item.element.classList.remove('contextual-hidden');
+
+      // Agregar animación SOLO la primera vez que se revela
+      item.element.classList.add('contextual-element--revealing');
+
+      // Remover la clase de animación después de que termine (800ms)
+      setTimeout(() => {
+        if (item.element) {
+          item.element.classList.remove('contextual-element--revealing');
+        }
+      }, 800);
 
       if (!silent) {
         const label = item.label || item.element?.getAttribute('class') || 'contexto';
@@ -367,6 +608,8 @@ function restoreContextElementsVisibility() {
   contextElements.forEach(item => {
     if (item.element) {
       item.element.classList.remove('contextual-hidden');
+      // Limpiar cualquier animación de revelación pendiente
+      item.element.classList.remove('contextual-element--revealing');
     }
     item.revealed = true;
   });
@@ -552,18 +795,21 @@ function configurarEscalas(data) {
 
   // ===== MAPEOS DE DATOS A SONIDO =====
   // Fallecidos: valores más altos → latidos más rápidos
-  escalaLatidos = d3.scaleLinear()
+  // Rango extremadamente dramático para narrativa emocional intensa
+  // Usando escala power (exponente 1.3) para enfatizar aún más los picos
+  escalaLatidos = d3.scalePow()
+    .exponent(1.3)  // Curva que enfatiza los valores altos (picos más dramáticos)
     .domain([0, maxFallecidos])
-    .range([60, 140])  // BPM aproximado: menos muertes = pulso lento, más muertes = pulso acelerado
+    .range([65, 200])  // BPM: pocas muertes = muy calmado (65), PICOS = pánico extremo (200)
     .clamp(true);
 
   console.log('🎼 Escala de sonificación tipo latido configurada:');
-  console.log(`   - Fallecidos: ${maxFallecidos} max → 60-140 BPM (ritmo cardíaco aproximado)`);
+  console.log(`   - Fallecidos: ${maxFallecidos} max → 65-200 BPM (contraste extremo)`);
 }
 
 /**
  * Reproduce el sonido correspondiente a un punto de datos
- * @param {Object} punto - Punto de datos con {deaths_7d}
+ * @param {Object} punto - Punto de datos con {deaths_7d_smooth} o {deaths_7d}
  * @param {Number} duracion - Duración del beep en segundos (default muy corto para ECG)
  */
 function reproducirPunto(punto, duracion = 0.08) {
@@ -573,12 +819,16 @@ function reproducirPunto(punto, duracion = 0.08) {
 
   // Solo reproducir si hay datos válidos de fallecidos y la serie está habilitada
   const deathsEnabled = !filterState || filterState.deaths !== false;
-  if (deathsEnabled && punto.deaths_7d != null && Number.isFinite(punto.deaths_7d)) {
-    const bpmObjetivo = escalaLatidos ? escalaLatidos(punto.deaths_7d) : 80;
+  // Usar valor suavizado si existe, sino usar el original
+  const deathsValue = punto.deaths_7d_smooth != null ? punto.deaths_7d_smooth : punto.deaths_7d;
+
+  if (deathsEnabled && deathsValue != null && Number.isFinite(deathsValue)) {
+    const bpmObjetivo = escalaLatidos ? escalaLatidos(deathsValue) : 80;
     playHeartbeat(undefined, bpmObjetivo);
     triggerDeathsMarkerPulse();
 
-    console.log(`💓 Latido: ${Math.round(punto.deaths_7d)} fallecidos → ${Math.round(bpmObjetivo)} BPM`);
+    const originalValue = punto.deaths_7d_original || punto.deaths_7d;
+    console.log(`💓 Latido: ${Math.round(originalValue)} fallecidos (suavizado: ${Math.round(deathsValue)}) → ${Math.round(bpmObjetivo)} BPM`);
   }
 }
 
@@ -589,6 +839,13 @@ function reproducirPunto(punto, duracion = 0.08) {
 function obtenerDatosVisibles() {
   if (!chartData || !scales || !scales.xScale) {
     return chartData || [];
+  }
+
+  // Modo narrativa: reproducir TODOS los datos desde el inicio
+  // (aunque visualmente solo se muestre el zoom inicial)
+  if (isNarrativeMode) {
+    console.log(`📖 Modo narrativa: usando ${chartData.length} puntos totales`);
+    return chartData;
   }
 
   // Obtener dominio visible (rango de fechas en pantalla)
@@ -635,7 +892,15 @@ async function reproducirSonificacion() {
     return;
   }
 
-  playbackStartDate = datosVisibles[0]?.date || null;
+  // Procesar datos para audio: suavizado + reducción inteligente para 30 segundos máximo
+  const datosProcesados = prepararDatosParaSonido(datosVisibles);
+
+  if (!datosProcesados || datosProcesados.length === 0) {
+    alert('Error al procesar datos para sonificación.');
+    return;
+  }
+
+  playbackStartDate = datosProcesados[0]?.date || null;
 
   ensureChartContainer();
   ensureHighlightPath();
@@ -653,6 +918,8 @@ async function reproducirSonificacion() {
 
   console.log('▶️ Reproduciendo sonificación de datos...');
   isPlaying = true;
+  window.__disableZoom = true; // Deshabilitar zoom durante reproducción
+  setFiltersLocked(true);
 
   updatePlaybackAvailability();
 
@@ -661,18 +928,25 @@ async function reproducirSonificacion() {
     progressIndicator.style.display = 'none';
   }
 
-  // ===== EVENTOS DE REPRODUCCIÓN =====
-  let indice = 0;
-  const intervaloMs = 100; // 100ms entre puntos = ~10 puntos por segundo
+  // Inicializar BPM con el primer punto
+  const firstDeaths = datosProcesados[0]?.deaths_7d_smooth || datosProcesados[0]?.deaths_7d;
+  if (datosProcesados.length > 0 && firstDeaths != null) {
+    currentBpm = escalaLatidos ? escalaLatidos(firstDeaths) : 60;
+  } else {
+    currentBpm = 60;
+  }
 
-  playbackInterval = setInterval(() => {
-    if (indice >= datosVisibles.length) {
+  // ===== EVENTOS DE REPRODUCCIÓN CON INTERVALO DINÁMICO =====
+  let indice = 0;
+
+  const reproducirProximoPunto = () => {
+    if (!isPlaying || indice >= datosProcesados.length) {
       // Fin de la reproducción
       detenerReproduccion();
       return;
     }
 
-    const punto = datosVisibles[indice];
+    const punto = datosProcesados[indice];
 
     if (typeof centerOnDateCallback === 'function') {
       centerOnDateCallback(punto.date);
@@ -683,6 +957,15 @@ async function reproducirSonificacion() {
       lastPlaybackDate = punto.date;
     }
 
+    // Calcular BPM objetivo basado en los datos (usar valor suavizado si existe)
+    const deathsValue = punto.deaths_7d_smooth != null ? punto.deaths_7d_smooth : punto.deaths_7d;
+    const bpmObjetivo = deathsValue != null && Number.isFinite(deathsValue) && escalaLatidos
+      ? escalaLatidos(deathsValue)
+      : 60;
+
+    // Suavizar el BPM para transiciones graduales
+    const bpmSuavizado = smoothBpm(bpmObjetivo);
+
     // Reproducir sonido del punto actual
     reproducirPunto(punto, 0.12);
 
@@ -691,23 +974,41 @@ async function reproducirSonificacion() {
 
     // Log de progreso
     const fechaFormateada = d3.timeFormat('%d/%m/%Y')(punto.date);
-    console.log(`🎧 [${indice + 1}/${datosVisibles.length}] Reproduciendo datos del ${fechaFormateada}: ${Math.round(punto.deaths_7d)} fallecidos, ${punto.vaccinated_pct.toFixed(1)}% vacunación`);
+    const originalValue = punto.deaths_7d_original || punto.deaths_7d;
+    console.log(`🎧 [${indice + 1}/${datosProcesados.length}] ${fechaFormateada}: ${Math.round(originalValue)} fallecidos → ${Math.round(bpmSuavizado)} BPM`);
 
     indice++;
-  }, intervaloMs);
+
+    // Calcular intervalo dinámico basado en BPM suavizado
+    // BPM = latidos por minuto → intervalo en ms = 60000 / BPM
+    const intervaloMs = 60000 / bpmSuavizado;
+
+    // Programar el siguiente punto con el intervalo calculado
+    playbackInterval = setTimeout(reproducirProximoPunto, intervaloMs);
+  };
+
+  // Iniciar la reproducción
+  reproducirProximoPunto();
 }
 
 /**
  * Detiene la reproducción automática
  */
 function detenerReproduccion() {
+  const narrativeWasActive = isNarrativeMode || isNarrativePlaybackActive;
+
   if (playbackInterval) {
-    clearInterval(playbackInterval);
+    clearTimeout(playbackInterval);
     playbackInterval = null;
   }
 
   isPlaying = false;
   playbackStartDate = null;
+  currentBpm = 60; // Reiniciar BPM para la próxima reproducción
+  isNarrativeMode = false; // Desactivar modo narrativa
+  isNarrativePlaybackActive = false; // Desactivar flag de narrativa activa
+  window.__disableZoom = false; // Rehabilitar zoom
+  setFiltersLocked(false);
   setDeathsLineDimmed(false);
   setVaccinationLineDimmed(false);
   hideHighlightPath();
@@ -721,6 +1022,10 @@ function detenerReproduccion() {
   // Ocultar indicador de progreso
   if (progressIndicator) {
     progressIndicator.style.display = 'none';
+  }
+
+  if (narrativeWasActive) {
+    resetZoom().catch(() => {});
   }
 
   console.log('⏹️ Reproducción detenida');
@@ -938,13 +1243,37 @@ export function initSound(data, filters, chartScales, svg, options = {}) {
   // Obtener referencias a elementos del DOM
   playButton = document.getElementById('sound-play-btn');
   progressIndicator = document.getElementById('sound-progress');
+  const narrativeButton = document.getElementById('narrative-btn');
 
   // ===== EVENTOS DE BOTONES =====
   if (playButton) {
     playButton.addEventListener('click', async () => {
+      // Desactivar modo narrativa (si estaba activo)
+      isNarrativeMode = false;
+      isNarrativePlaybackActive = false;
+      // Primero resetear el zoom a vista completa
+      await resetZoom();
+      // Luego reproducir la sonificación
       await reproducirSonificacion();
     });
     console.log('✅ Botón de reproducción configurado');
+  }
+
+  if (narrativeButton) {
+    narrativeButton.addEventListener('click', async () => {
+      // Si ya está reproduciéndose en modo narrativa, detener
+      if (isNarrativePlaybackActive) {
+        detenerReproduccion();
+        return;
+      }
+
+      // Modo narrativa: hacer zoom al inicio de la pandemia y luego reproducir
+      isNarrativeMode = true;
+      isNarrativePlaybackActive = true;
+      await zoomToNarrativeStart();
+      await reproducirSonificacion();
+    });
+    console.log('✅ Botón de narrativa configurado');
   }
 
   updatePlaybackAvailability();

@@ -16,8 +16,8 @@ export const CHART_CONFIG = {
 
 // Colors (refined for minimalism)
 export const COLORS = {
-  deaths: '#d62728',
-  vaccination: '#1f77b4',
+  deaths: '#d62728',      // Rojo (original)
+  vaccination: '#1f77b4',  // Azul (original)
   grid: '#999',
   text: '#555',
   milestone: {
@@ -25,15 +25,15 @@ export const COLORS = {
     secondary: '#BBB',
     tertiary: '#CCC'
   },
-  // Colores por grupo etario (escala de colores cálidos a fríos por edad)
+  // Colores por grupo etario - paleta colorblind-safe usando esquema de Paul Tol
   ageGroups: {
-    '<=39': '#4ECDC4',      // Cyan/turquesa (jóvenes)
-    '40-49': '#45B7D1',     // Azul claro
-    '50-59': '#5B8C5A',     // Verde
-    '60-69': '#F4A259',     // Naranja claro
-    '70-79': '#E76F51',     // Naranja/rojo
-    '80-89': '#D62828',     // Rojo
-    '>=90': '#8B0000'       // Rojo oscuro (mayores)
+    '<=39': '#4477AA',      // Azul (jóvenes) - colorblind-safe
+    '40-49': '#66CCEE',     // Cyan - colorblind-safe
+    '50-59': '#228833',     // Verde - colorblind-safe
+    '60-69': '#CCBB44',     // Amarillo - colorblind-safe
+    '70-79': '#EE6677',     // Rosa/rojo claro - colorblind-safe
+    '80-89': '#AA3377',     // Púrpura - colorblind-safe
+    '>=90': '#BBBBBB'       // Gris (mayores) - colorblind-safe
   }
 };
 

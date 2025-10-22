@@ -49,6 +49,10 @@ let filterState = {
   '>=90': false
 };
 
+const FILTER_LOCK_MESSAGE = 'Detén la animación para cambiar filtros';
+let filtersLocked = false;
+let filterToggleDefaultText = null;
+
 // Helper to know if any age filter is active
 const hasActiveAgeFilters = () => AGE_GROUPS.some(group => filterState[group]);
 
@@ -786,7 +790,13 @@ function redrawChart() {
   drawLines(chartGroup, chartData, scales, config);
   addMilestones(chartGroup, scales, config);
   addDirectLabels(chartGroup, chartData, scales, config);
-  if (!hasActiveAgeFilters()) {
+
+  // Ocultar direct labels si hay filtros activos
+  const hasFilters = hasActiveAgeFilters();
+  chartGroup.selectAll('.direct-label')
+    .style('opacity', hasFilters ? 0 : 1);
+
+  if (!hasFilters) {
     addAnnotations(chartGroup, chartData, scales, config);
   }
 
@@ -794,6 +804,64 @@ function redrawChart() {
   setupZoom(svg, config);
   setupTooltip(chartGroup, config);
   updateSoundReferences(scales, filterState, chartGroup, { centerOnDate: centerViewOnDate });
+}
+
+export function setFiltersLocked(isLocked) {
+  filtersLocked = !!isLocked;
+
+  const toggleBtn = document.getElementById('filter-toggle');
+  const dropdown = document.getElementById('filter-dropdown');
+  const resetBtn = document.getElementById('filter-reset-btn');
+  const checkboxes = Object.keys(FILTER_ID_TO_GROUP).map(id => document.getElementById(id));
+
+  if (toggleBtn) {
+    const textSpan = toggleBtn.querySelector('.filter-toggle-text');
+    if (!filterToggleDefaultText && textSpan) {
+      filterToggleDefaultText = textSpan.textContent.trim();
+    }
+
+    if (filtersLocked) {
+      toggleBtn.classList.remove('active');
+    }
+
+    toggleBtn.disabled = filtersLocked;
+    toggleBtn.classList.toggle('locked', filtersLocked);
+    if (filtersLocked) {
+      toggleBtn.setAttribute('aria-disabled', 'true');
+      toggleBtn.title = FILTER_LOCK_MESSAGE;
+    } else {
+      toggleBtn.removeAttribute('aria-disabled');
+      toggleBtn.title = filterToggleDefaultText || 'Comparar grupos etarios';
+    }
+
+    if (textSpan) {
+      textSpan.textContent = filtersLocked
+        ? FILTER_LOCK_MESSAGE
+        : (filterToggleDefaultText || 'Comparar grupos etarios');
+    }
+  }
+
+  if (dropdown) {
+    if (filtersLocked) {
+      dropdown.classList.remove('open');
+      dropdown.style.display = 'none';
+    }
+    dropdown.classList.toggle('locked', filtersLocked);
+  }
+
+  checkboxes.forEach(checkbox => {
+    if (!checkbox) return;
+    checkbox.disabled = filtersLocked;
+    const wrapper = checkbox.closest('.filter-checkbox');
+    if (wrapper) {
+      wrapper.classList.toggle('locked', filtersLocked);
+    }
+  });
+
+  if (resetBtn) {
+    resetBtn.disabled = filtersLocked;
+    resetBtn.classList.toggle('locked', filtersLocked);
+  }
 }
 
 /**
@@ -806,6 +874,10 @@ function setupFilters() {
 
   if (toggleBtn && dropdown) {
     toggleBtn.addEventListener('click', () => {
+      if (filtersLocked) {
+        return;
+      }
+
       const isOpen = dropdown.classList.contains('open');
 
       if (isOpen) {
@@ -853,6 +925,8 @@ function setupFilters() {
       console.log('🔄 Filtros reseteados');
     });
   }
+
+  setFiltersLocked(filtersLocked);
 }
 
 // ===== CONFIGURACIÓN DE TOOLTIP (DETAILS ON DEMAND) =====
@@ -1134,12 +1208,27 @@ function setupTooltip(svg, config) {
 
 // ===== CONFIGURACIÓN DE ZOOM =====
 /**
+ * Actualiza el indicador de porcentaje de zoom
+ * @param {number} k - Factor de zoom (1 = 100%, 2 = 200%, etc.)
+ */
+function updateZoomPercentage(k) {
+  const zoomPercentageEl = document.getElementById('zoom-percentage');
+  if (zoomPercentageEl) {
+    const percentage = Math.round(k * 100);
+    zoomPercentageEl.textContent = `${percentage}%`;
+  }
+}
+
+/**
  * Función que se ejecuta cuando se hace zoom/pan
  * @param {Object} event - Evento de D3 zoom
  */
 function zoomed(event, config) {
   // Guardar el transform actual
   currentTransform = event.transform;
+
+  // Actualizar indicador de zoom
+  updateZoomPercentage(currentTransform.k);
 
   // Crear nueva escala X transformada (solo horizontal)
   const newXScale = currentTransform.rescaleX(originalXScale);
@@ -1387,6 +1476,17 @@ function zoomed(event, config) {
     });
   }
 
+  // ===== OCULTAR/MOSTRAR DIRECT LABELS SEGÚN ZOOM Y FILTROS =====
+  // Los direct labels solo se muestran sin zoom significativo y sin filtros activos
+  // Desaparecen gradualmente con el zoom (threshold: 1.5x)
+  const zoomLevel = currentTransform.k;
+  const hasFilters = hasActiveAgeFilters();
+  const shouldHideLabels = zoomLevel > 1.5 || hasFilters;
+
+  chartGroup.selectAll('.direct-label')
+    .style('opacity', shouldHideLabels ? 0 : 1)
+    .style('pointer-events', 'none'); // Siempre none (no son interactivos)
+
   updateSoundReferences(scales, filterState, chartGroup, { centerOnDate: centerViewOnDate });
 }
 
@@ -1444,6 +1544,10 @@ function setupZoom(svg, config) {
     .translateExtent([[0, 0], [config.width, config.height]]) // Limitar paneo
     .extent([[0, 0], [config.width, config.height]])
     .filter(function(event) {
+      // Bloquear zoom si hay reproducción activa (sonificación o narrativa)
+      if (window.__disableZoom) {
+        return false;
+      }
       // Permitir zoom con rueda del mouse y paneo con arrastre
       // Solo modificar el eje X (horizontal)
       return event.type !== 'dblclick'; // Desactivar doble click para zoom
@@ -1476,6 +1580,74 @@ function setupZoom(svg, config) {
         .call(zoomBehavior.transform, d3.zoomIdentity);
     });
   }
+}
+
+/**
+ * Resetea el zoom a la vista completa
+ * @returns {Promise} Promesa que se resuelve cuando la transición termina
+ */
+export function resetZoom() {
+  return new Promise((resolve) => {
+    if (!chartSvg || !zoomBehavior) {
+      console.warn('⚠️ No se puede resetear zoom: componentes no inicializados');
+      resolve();
+      return;
+    }
+
+    chartSvg.transition()
+      .duration(750)
+      .call(zoomBehavior.transform, d3.zoomIdentity)
+      .on('end', () => {
+        console.log('🔄 Zoom reseteado');
+        resolve();
+      });
+  });
+}
+
+/**
+ * Hace zoom al inicio de la pandemia para modo narrativa
+ * Enfoca los primeros 9 meses (abril 2020 - diciembre 2020)
+ * @returns {Promise} Promesa que se resuelve cuando la transición termina
+ */
+export function zoomToNarrativeStart() {
+  return new Promise((resolve) => {
+    if (!chartSvg || !zoomBehavior || !chartData || !originalXScale) {
+      console.warn('⚠️ No se puede hacer zoom narrativo: componentes no inicializados');
+      resolve();
+      return;
+    }
+
+    // Definir fechas del período narrativo (primeros 9 meses de la pandemia)
+    const narrativeStartDate = d3.timeParse('%Y-%m-%d')('2020-04-09'); // Primer dato
+    const narrativeEndDate = d3.timeParse('%Y-%m-%d')('2020-12-31');   // ~9 meses
+
+    // Calcular el rango completo de datos
+    const fullDomain = originalXScale.domain();
+    const fullRange = originalXScale.range();
+    const fullWidth = fullRange[1] - fullRange[0];
+
+    // Calcular posiciones en píxeles
+    const x0 = originalXScale(narrativeStartDate);
+    const x1 = originalXScale(narrativeEndDate);
+    const narrativeWidth = x1 - x0;
+
+    // Calcular el factor de zoom necesario
+    const k = fullWidth / narrativeWidth;
+
+    // Calcular el translate para centrar
+    const tx = -x0 * k;
+
+    // Crear el transform
+    const transform = d3.zoomIdentity.translate(tx, 0).scale(k);
+
+    chartSvg.transition()
+      .duration(1000) // Un poco más lento para efecto narrativo
+      .call(zoomBehavior.transform, transform)
+      .on('end', () => {
+        console.log('📖 Zoom narrativo aplicado (abril-diciembre 2020)');
+        resolve();
+      });
+  });
 }
 
 /**
