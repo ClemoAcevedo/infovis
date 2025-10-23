@@ -18,9 +18,6 @@
                  aria-label="Gráfico de líneas que muestra cómo los fallecidos por COVID-19 en Chile disminuyen a medida que aumenta el porcentaje de vacunados entre 2020 y 2023."
                  tabindex="0">
             </svg>
-            <div class="chart-legend" id="chart-legend" style="display: none;">
-                <!-- La leyenda se generará dinámicamente -->
-            </div>
             <div class="controls-container">
                 <div class="narrative-container">
                     <button class="narrative-btn" id="narrative-btn" title="Ver narrativa completa desde el inicio de la pandemia">
@@ -59,6 +56,9 @@
                             <span class="checkbox-label age-label">≥90</span>
                         </label>
                         <button class="filter-reset-btn" id="filter-reset-btn">Resetear Filtros</button>
+                    </div>
+                    <div class="chart-legend" id="chart-legend" aria-hidden="true">
+                        <!-- La leyenda se generará dinámicamente -->
                     </div>
                 </div>
             </div>

@@ -689,54 +689,31 @@ function updateLegend() {
   const legendContainer = document.getElementById('chart-legend');
   if (!legendContainer) return;
 
-  const selectedGroups = AGE_GROUPS.filter(g => filterState[g]);
+  const legendHTML = `<div class="chart-legend-title">Comparación</div>
+  <div class="legend-section legend-general">
+    <div class="legend-section-title">Población General</div>
+    <div class="legend-item">
+      <div class="legend-color-box" style="background-color: ${COLORS.deaths};"></div>
+      <div class="legend-label">Fallecidos</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color-box dashed" style="color: ${COLORS.vaccination};"></div>
+      <div class="legend-label">Vacunación</div>
+    </div>
+  </div>`;
 
-  // Si no hay grupos seleccionados, ocultar la leyenda
-  if (selectedGroups.length === 0) {
-    legendContainer.style.display = 'none';
+  legendContainer.innerHTML = legendHTML;
+
+  const hasActiveFilters = AGE_GROUPS.some(g => filterState[g]);
+
+  if (!hasActiveFilters) {
+    legendContainer.classList.remove('is-active');
+    legendContainer.setAttribute('aria-hidden', 'true');
     return;
   }
 
-  // Mostrar la leyenda
-  legendContainer.style.display = 'block';
-
-  // Generar contenido HTML de la leyenda
-  let legendHTML = '<div class="chart-legend-title">Comparación</div>';
-
-  // Sección de población general
-  legendHTML += '<div class="legend-section legend-general">';
-  legendHTML += '<div class="legend-section-title">Población General</div>';
-  legendHTML += `<div class="legend-item">
-    <div class="legend-color-box" style="background-color: ${COLORS.deaths};"></div>
-    <div class="legend-label">Fallecidos</div>
-  </div>`;
-  legendHTML += `<div class="legend-item">
-    <div class="legend-color-box dashed" style="color: ${COLORS.vaccination};"></div>
-    <div class="legend-label">Vacunación</div>
-  </div>`;
-  legendHTML += '</div>';
-
-  // Sección de grupos etarios
-  if (selectedGroups.length > 0) {
-    legendHTML += '<div class="legend-section">';
-    legendHTML += '<div class="legend-section-title">Grupos Etarios</div>';
-
-    selectedGroups.forEach(group => {
-      const color = COLORS.ageGroups[group];
-      const label = group === '<=39' ? '≤39 años' :
-                    group === '>=90' ? '≥90 años' :
-                    `${group} años`;
-
-      legendHTML += `<div class="legend-item">
-        <div class="legend-color-box" style="background-color: ${color};"></div>
-        <div class="legend-label">${label}</div>
-      </div>`;
-    });
-
-    legendHTML += '</div>';
-  }
-
-  legendContainer.innerHTML = legendHTML;
+  legendContainer.classList.add('is-active');
+  legendContainer.setAttribute('aria-hidden', 'false');
 }
 
 /**

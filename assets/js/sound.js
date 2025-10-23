@@ -932,6 +932,28 @@ function revealContextElementsUpToDate(targetDate, silent = false, previousDate 
           const narrativeText = generateNarrativeText(contextType, originalText, elementId);
           speakNarrative(narrativeText);
 
+          // ===== COORDINACIÓN: Iniciar tono de vacunación cuando se narra "Inicio Vacunación" =====
+          if (contextType === 'milestone' && originalText.toLowerCase().includes('inicio vacunación')) {
+            // Calcular delay para que el tono comience justo después de terminar la frase
+            // "Comienza la campaña masiva de vacunación" toma ~3 segundos a rate 1.05
+            setTimeout(() => {
+              // Verificar si hay datos de vacunación disponibles para iniciar el tono
+              if (chartData) {
+                const vaccinationData = chartData.filter(d =>
+                  d.date >= item.date && d.vaccinated_pct != null && d.vaccinated_pct > 0
+                );
+
+                if (vaccinationData.length > 0 && !isVaccinationTonePlaying) {
+                  // Iniciar el tono con la frecuencia del primer punto de vacunación
+                  const firstVaccinationValue = vaccinationData[0].vaccinated_pct;
+                  const frequency = escalaVacunacion ? escalaVacunacion(firstVaccinationValue) : 261.63;
+                  startContinuousVaccinationTone(frequency);
+                  console.log(`🎵 Tono de vacunación iniciado coordinado con narración (${firstVaccinationValue.toFixed(2)}% → ${frequency.toFixed(1)} Hz)`);
+                }
+              }
+            }, 3500); // 3.5 segundos para que termine la narración
+          }
+
           const anticipationLabel = isOmicron ? ' (anticipada 12 días)' : ' (anticipada 3 días)';
           const dateLog = `Fecha objetivo: ${targetDate.toISOString().split('T')[0]}, Fecha narración: ${narrationDate.toISOString().split('T')[0]}, Fecha visual: ${item.date.toISOString().split('T')[0]}`;
           console.log(`🎙️ Narración activada: "${originalText}"${anticipationLabel}`);
@@ -1355,9 +1377,42 @@ async function reproducirSonificacion() {
   // cuando se encuentre el primer punto con vacunación > 0% en reproducirPunto()
 
   // ===== VOZ EN OFF INICIAL: Solo en modo narrativa =====
+  let narrativeIntroDelay = 0;
+  let narrativeIntroTextElement = null;
   if (isNarrativePlaybackActive) {
-    // Narrar el inicio de la pandemia (sin anotación visual)
-    speakNarrative('Marzo de 2020. Comienza la pandemia de COVID-19 en Chile');
+    const introText = 'Marzo de 2020. Comienza la pandemia de COVID-19 en Chile, con los primeros muertos';
+
+    // Crear elemento de texto en pantalla
+    const container = ensureChartContainer();
+    if (container) {
+      narrativeIntroTextElement = document.createElement('div');
+      narrativeIntroTextElement.className = 'narrative-intro-text';
+      narrativeIntroTextElement.textContent = introText;
+      container.appendChild(narrativeIntroTextElement);
+      console.log('📝 Texto narrativo inicial mostrado en pantalla');
+    }
+
+    // Narrar el inicio de la pandemia con mención a los primeros muertos
+    speakNarrative(introText);
+
+    // Calcular delay: ~6 segundos para la frase completa, el ritmo comienza justo después de "muertos"
+    // Frase completa: "Marzo de 2020. Comienza la pandemia de COVID-19 en Chile, con los primeros muertos"
+    // A rate 1.05, esto toma ~6-7 segundos
+    narrativeIntroDelay = 6500; // Delay en milisegundos para que el ritmo comience después de "muertos"
+
+    // Desvanecer el texto justo antes de que comience el ritmo (coordinado con la palabra "muertos")
+    setTimeout(() => {
+      if (narrativeIntroTextElement) {
+        narrativeIntroTextElement.classList.add('fade-out');
+        // Remover el elemento del DOM después de que termine la animación
+        setTimeout(() => {
+          if (narrativeIntroTextElement && narrativeIntroTextElement.parentNode) {
+            narrativeIntroTextElement.parentNode.removeChild(narrativeIntroTextElement);
+            console.log('📝 Texto narrativo inicial removido');
+          }
+        }, 800); // Duración de la transición CSS
+      }
+    }, narrativeIntroDelay - 200); // Comenzar a desvanecer 200ms antes del inicio del ritmo
   }
 
   // ===== EVENTOS DE REPRODUCCIÓN CON INTERVALO DINÁMICO =====
@@ -1413,8 +1468,16 @@ async function reproducirSonificacion() {
     playbackInterval = setTimeout(reproducirProximoPunto, intervaloMs);
   };
 
-  // Iniciar la reproducción
-  reproducirProximoPunto();
+  // Iniciar la reproducción con delay si hay narración inicial
+  if (narrativeIntroDelay > 0) {
+    // Esperar a que termine la narración antes de comenzar el ritmo
+    setTimeout(() => {
+      reproducirProximoPunto();
+    }, narrativeIntroDelay);
+  } else {
+    // Sin delay, iniciar inmediatamente
+    reproducirProximoPunto();
+  }
 }
 
 /**
@@ -1434,6 +1497,13 @@ function detenerReproduccion() {
 
   // Detener voz en off
   stopNarrative();
+
+  // Limpiar texto narrativo introductorio si existe
+  const narrativeIntroText = document.querySelector('.narrative-intro-text');
+  if (narrativeIntroText && narrativeIntroText.parentNode) {
+    narrativeIntroText.parentNode.removeChild(narrativeIntroText);
+    console.log('📝 Texto narrativo inicial limpiado al detener');
+  }
 
   isPlaying = false;
   playbackStartDate = null;

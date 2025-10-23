@@ -71,7 +71,7 @@ export const LINE_STYLES = {
 // Milestone data with styling (simplified)
 export const MILESTONES = [
   {
-    date: '2021-02-03',
+    date: '2020-12-25',
     label: ['Inicio', 'Vacunación'],
     style: 'primary',
     strokeWidth: 1,
@@ -109,7 +109,7 @@ export const CONTENT = {
   },
   vaccinationJumpAnnotation: {
     text: 'Inicio campaña masiva',
-    date: '2021-02-03'
+    date: '2020-12-25'
   },
   firstAnnotation: {
     text: ['Salto inicial de cobertura:', 'primeras dosis a grupos', 'prioritarios y carga histórica',],
