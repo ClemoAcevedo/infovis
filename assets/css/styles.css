@@ -80,10 +80,12 @@ body {
   margin: 0;
   padding: 0;
   position: absolute;
-  top: 45%;
-  right: 110px;
-  transform: translateY(-50%);
+  top: 40%;
+  left: 88%;
+  transform: translate(-50%, -50%);
   z-index: 200;
+  max-width: 200px;
+  width: auto;
 }
 
 /* Filters container - Desplegable minimalista */
@@ -550,6 +552,33 @@ body {
 }
 
 /* Responsive design */
+/* Para pantallas extra grandes con mucho espacio */
+@media (min-width: 1200px) {
+  .controls-container {
+    left: 89%;
+    top: 40%;
+    max-width: 220px;
+  }
+}
+
+/* Para pantallas grandes */
+@media (max-width: 1199px) and (min-width: 1024px) {
+  .controls-container {
+    left: 88%;
+    top: 40%;
+    max-width: 200px;
+  }
+}
+
+/* Para pantallas medianas */
+@media (max-width: 1023px) and (min-width: 769px) {
+  .controls-container {
+    left: 86%;
+    top: 40%;
+    max-width: 180px;
+  }
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 12px;
@@ -580,9 +609,11 @@ body {
 
   .controls-container {
     top: 14px;
+    left: auto;
     right: 16px;
     transform: none;
     gap: 12px;
+    max-width: 180px;
   }
 
   .filter-toggle {
@@ -643,8 +674,11 @@ body {
 
   .controls-container {
     top: 10px;
+    left: auto;
     right: 10px;
+    transform: none;
     gap: 10px;
+    max-width: 160px;
   }
 
   .filter-toggle {
