@@ -19,6 +19,35 @@ let playbackInterval = null;
 let playbackStartDate = null;
 let currentBpm = 60; // BPM actual para suavizado de transiciones
 let isVaccinationTonePlaying = false; // Flag para saber si el tono de vacunación está sonando
+let activeTimeouts = []; // Array para trackear todos los timeouts activos
+
+/**
+ * Crea un setTimeout trackeado que se puede cancelar automáticamente
+ * @param {Function} callback - Función a ejecutar
+ * @param {Number} delay - Delay en milisegundos
+ * @returns {Number} ID del timeout
+ */
+function createTrackedTimeout(callback, delay) {
+  const timeoutId = setTimeout(() => {
+    // Remover del array cuando se ejecuta
+    const index = activeTimeouts.indexOf(timeoutId);
+    if (index > -1) {
+      activeTimeouts.splice(index, 1);
+    }
+    callback();
+  }, delay);
+  activeTimeouts.push(timeoutId);
+  return timeoutId;
+}
+
+/**
+ * Cancela todos los timeouts activos
+ */
+function clearAllTimeouts() {
+  activeTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+  activeTimeouts = [];
+  console.log('🧹 Todos los timeouts cancelados');
+}
 
 // ===== VOZ EN OFF (WEB SPEECH API) =====
 let speechSynthesis = null;
@@ -839,7 +868,7 @@ function revealContextElementsUpToDate(targetDate, silent = false, previousDate 
       item.element.classList.add('contextual-element--revealing');
 
       // Remover la clase de animación después de que termine (800ms)
-      setTimeout(() => {
+      createTrackedTimeout(() => {
         if (item.element) {
           item.element.classList.remove('contextual-element--revealing');
         }
@@ -936,7 +965,10 @@ function revealContextElementsUpToDate(targetDate, silent = false, previousDate 
           if (contextType === 'milestone' && originalText.toLowerCase().includes('inicio vacunación')) {
             // Calcular delay para que el tono comience justo después de terminar la frase
             // "Comienza la campaña masiva de vacunación" toma ~3 segundos a rate 1.05
-            setTimeout(() => {
+            createTrackedTimeout(() => {
+              // Verificar que aún estamos reproduciendo antes de iniciar el tono
+              if (!isPlaying) return;
+
               // Verificar si hay datos de vacunación disponibles para iniciar el tono
               if (chartData) {
                 const vaccinationData = chartData.filter(d =>
@@ -1401,11 +1433,11 @@ async function reproducirSonificacion() {
     narrativeIntroDelay = 6500; // Delay en milisegundos para que el ritmo comience después de "muertos"
 
     // Desvanecer el texto justo antes de que comience el ritmo (coordinado con la palabra "muertos")
-    setTimeout(() => {
+    createTrackedTimeout(() => {
       if (narrativeIntroTextElement) {
         narrativeIntroTextElement.classList.add('fade-out');
         // Remover el elemento del DOM después de que termine la animación
-        setTimeout(() => {
+        createTrackedTimeout(() => {
           if (narrativeIntroTextElement && narrativeIntroTextElement.parentNode) {
             narrativeIntroTextElement.parentNode.removeChild(narrativeIntroTextElement);
             console.log('📝 Texto narrativo inicial removido');
@@ -1465,13 +1497,13 @@ async function reproducirSonificacion() {
     const intervaloMs = 60000 / bpmSuavizado;
 
     // Programar el siguiente punto con el intervalo calculado
-    playbackInterval = setTimeout(reproducirProximoPunto, intervaloMs);
+    playbackInterval = createTrackedTimeout(reproducirProximoPunto, intervaloMs);
   };
 
   // Iniciar la reproducción con delay si hay narración inicial
   if (narrativeIntroDelay > 0) {
     // Esperar a que termine la narración antes de comenzar el ritmo
-    setTimeout(() => {
+    createTrackedTimeout(() => {
       reproducirProximoPunto();
     }, narrativeIntroDelay);
   } else {
@@ -1485,6 +1517,9 @@ async function reproducirSonificacion() {
  */
 function detenerReproduccion() {
   const narrativeWasActive = isNarrativeMode || isNarrativePlaybackActive;
+
+  // Cancelar TODOS los timeouts activos (crítico para evitar que se ejecuten después de detener)
+  clearAllTimeouts();
 
   if (playbackInterval) {
     clearTimeout(playbackInterval);
@@ -1525,40 +1560,16 @@ function detenerReproduccion() {
     progressIndicator.style.display = 'none';
   }
 
+  // Restaurar las líneas ANTES de resetear el zoom
+  setDeathsLineDimmed(false);
+  setVaccinationLineDimmed(false);
+
   if (narrativeWasActive) {
     resetZoom().then(() => {
-      // Después de resetear el zoom, necesitamos esperar un frame para que el DOM se actualice
-      requestAnimationFrame(() => {
-        // Re-capturar referencias a las líneas con sus valores correctos
-        if (chartGroup && typeof chartGroup.select === 'function') {
-          const deathsLine = chartGroup.select('.line--deaths-general');
-          const vaccinationLine = chartGroup.select('.line--vaccination-general');
-
-          if (!deathsLine.empty()) {
-            deathsLine
-              .attr('stroke', '#d62728')
-              .attr('stroke-width', 1.8)
-              .attr('stroke-opacity', 0.8)
-              .style('opacity', null);
-          }
-
-          if (!vaccinationLine.empty()) {
-            vaccinationLine
-              .attr('stroke', '#1f77b4')
-              .attr('stroke-width', 1.8)
-              .attr('stroke-opacity', 0.8)
-              .style('opacity', null);
-          }
-        }
-        console.log('✅ Gráfico restaurado después de narrativa');
-      });
+      console.log('✅ Gráfico restaurado después de narrativa');
     }).catch((error) => {
       console.error('Error al resetear zoom:', error);
     });
-  } else {
-    // Si no era narrativa, restaurar inmediatamente
-    setDeathsLineDimmed(false);
-    setVaccinationLineDimmed(false);
   }
 
   console.log('⏹️ Reproducción detenida');
@@ -1733,6 +1744,9 @@ export function cleanupSound() {
   if (isPlaying) {
     detenerReproduccion();
   }
+
+  // Asegurar que no queden timeouts activos
+  clearAllTimeouts();
 
   hideHighlightPath();
   hideDeathsMarker();
