@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico de Viewport</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+        .info-box {
+            background: #f5f5f5;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .info-item {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        .info-item strong {
+            display: inline-block;
+            width: 250px;
+            color: #2C7FB8;
+        }
+        .warning {
+            background: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+        }
+        h1 {
+            color: #333;
+        }
+        h2 {
+            color: #666;
+            margin-top: 30px;
+        }
+        .copy-btn {
+            background: #2C7FB8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .copy-btn:hover {
+            background: #1f5f8f;
+        }
+        .copy-btn:active {
+            transform: scale(0.98);
+        }
+        #copyStatus {
+            color: green;
+            margin-left: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Diagnóstico de Viewport y Navegador</h1>
+    <p>Esta página muestra información sobre tu configuración de pantalla y navegador.</p>
+
+    <div class="info-box">
+        <h2>📐 Información de Pantalla</h2>
+        <div class="info-item"><strong>Resolución de pantalla:</strong> <span id="screenRes"></span></div>
+        <div class="info-item"><strong>Viewport del navegador:</strong> <span id="viewportSize"></span></div>
+        <div class="info-item"><strong>Altura disponible (vh):</strong> <span id="viewportHeight"></span></div>
+        <div class="info-item"><strong>Ancho disponible (vw):</strong> <span id="viewportWidth"></span></div>
+        <div class="info-item"><strong>Device Pixel Ratio:</strong> <span id="dpr"></span></div>
+    </div>
+
+    <div class="info-box">
+        <h2>🌐 Información del Navegador</h2>
+        <div class="info-item"><strong>Navegador:</strong> <span id="browser"></span></div>
+        <div class="info-item"><strong>Sistema Operativo:</strong> <span id="os"></span></div>
+        <div class="info-item"><strong>Zoom del navegador:</strong> <span id="zoom"></span></div>
+    </div>
+
+    <div class="info-box warning" id="warningBox" style="display: none;">
+        <h2>⚠️ Posibles Problemas Detectados</h2>
+        <ul id="warnings"></ul>
+    </div>
+
+    <div class="info-box">
+        <h2>📋 Información Completa</h2>
+        <button class="copy-btn" onclick="copyInfo()">Copiar toda la información</button>
+        <span id="copyStatus"></span>
+        <pre id="fullInfo" style="background: white; padding: 15px; border-radius: 5px; margin-top: 15px; overflow-x: auto;"></pre>
+    </div>
+
+    <script>
+        function detectBrowser() {
+            const ua = navigator.userAgent;
+            if (ua.indexOf("Firefox") > -1) return "Firefox";
+            if (ua.indexOf("Edg") > -1) return "Edge";
+            if (ua.indexOf("Chrome") > -1) return "Chrome";
+            if (ua.indexOf("Safari") > -1) return "Safari";
+            return "Desconocido";
+        }
+
+        function detectOS() {
+            const ua = navigator.userAgent;
+            if (ua.indexOf("Win") > -1) return "Windows";
+            if (ua.indexOf("Mac") > -1) return "macOS";
+            if (ua.indexOf("Linux") > -1) return "Linux";
+            if (ua.indexOf("Android") > -1) return "Android";
+            if (ua.indexOf("iOS") > -1) return "iOS";
+            return "Desconocido";
+        }
+
+        function updateInfo() {
+            const screenRes = `${screen.width} × ${screen.height}px`;
+            const viewportSize = `${window.innerWidth} × ${window.innerHeight}px`;
+            const dpr = window.devicePixelRatio || 1;
+            const zoom = Math.round((window.outerWidth / window.innerWidth) * 100);
+            const browser = detectBrowser();
+            const os = detectOS();
+
+            document.getElementById('screenRes').textContent = screenRes;
+            document.getElementById('viewportSize').textContent = viewportSize;
+            document.getElementById('viewportHeight').textContent = `${window.innerHeight}px`;
+            document.getElementById('viewportWidth').textContent = `${window.innerWidth}px`;
+            document.getElementById('dpr').textContent = dpr;
+            document.getElementById('browser').textContent = browser;
+            document.getElementById('os').textContent = os;
+            document.getElementById('zoom').textContent = zoom === 100 ? '100% (normal)' : `${zoom}% ⚠️`;
+
+            // Detectar problemas
+            const warnings = [];
+            if (window.innerHeight < 800) {
+                warnings.push(`Altura del viewport (${window.innerHeight}px) es menor a 800px - el panel se comprimirá automáticamente`);
+            }
+            if (window.innerHeight < 700) {
+                warnings.push(`⚠️ Altura muy limitada (${window.innerHeight}px) - elementos extremadamente comprimidos`);
+            }
+            if (zoom !== 100) {
+                warnings.push(`Zoom del navegador no está al 100% (está en ${zoom}%) - puede afectar el diseño`);
+            }
+            if (dpr !== 1) {
+                warnings.push(`Device Pixel Ratio es ${dpr} - indica escala del sistema operativo activa`);
+            }
+
+            if (warnings.length > 0) {
+                document.getElementById('warningBox').style.display = 'block';
+                const warningsList = document.getElementById('warnings');
+                warningsList.innerHTML = warnings.map(w => `<li>${w}</li>`).join('');
+            }
+
+            // Información completa
+            const fullInfo = `
+╔════════════════════════════════════════════════════════════╗
+║         DIAGNÓSTICO DE VIEWPORT Y NAVEGADOR                ║
+╚════════════════════════════════════════════════════════════╝
+
+📐 INFORMACIÓN DE PANTALLA
+├─ Resolución de pantalla: ${screenRes}
+├─ Viewport del navegador: ${viewportSize}
+├─ Altura disponible: ${window.innerHeight}px
+├─ Ancho disponible: ${window.innerWidth}px
+└─ Device Pixel Ratio: ${dpr}
+
+🌐 INFORMACIÓN DEL NAVEGADOR
+├─ Navegador: ${browser}
+├─ Sistema Operativo: ${os}
+├─ Zoom: ${zoom}%
+└─ User Agent: ${navigator.userAgent}
+
+⚙️ CÁLCULOS PARA PANEL DE CONTROL
+├─ max-height calculado: calc(100vh - 100px) = ${window.innerHeight - 100}px
+├─ Altura mínima necesaria: ~600px (panel + leyenda completa)
+└─ Espacio disponible: ${window.innerHeight - 100 > 600 ? '✅ Suficiente' : '⚠️ Limitado'}
+
+${warnings.length > 0 ? `
+⚠️ ADVERTENCIAS
+${warnings.map((w, i) => `${i + 1}. ${w}`).join('\n')}
+` : '✅ No se detectaron problemas'}
+`;
+            document.getElementById('fullInfo').textContent = fullInfo;
+        }
+
+        function copyInfo() {
+            const info = document.getElementById('fullInfo').textContent;
+            navigator.clipboard.writeText(info).then(() => {
+                const status = document.getElementById('copyStatus');
+                status.textContent = '✅ ¡Copiado!';
+                setTimeout(() => status.textContent = '', 2000);
+            });
+        }
+
+        // Actualizar al cargar y al redimensionar
+        updateInfo();
+        window.addEventListener('resize', updateInfo);
+    </script>
+</body>
+</html>

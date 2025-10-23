@@ -80,12 +80,12 @@ body {
   margin: 0;
   padding: 0;
   position: absolute;
-  top: clamp(50px, 8vh, 90px);
+  top: 50%;
   left: 88%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   z-index: 200;
   max-width: 200px;
-  max-height: 96vh;
+  max-height: 88vh;
   width: auto;
 }
 
@@ -557,9 +557,10 @@ body {
 @media (min-width: 1200px) {
   .controls-container {
     left: 89%;
-    top: clamp(50px, 8vh, 90px);
+    top: 50%;
+    transform: translate(-50%, -50%);
     max-width: 220px;
-    max-height: 96vh;
+    max-height: 88vh;
   }
 }
 
@@ -567,9 +568,10 @@ body {
 @media (max-width: 1199px) and (min-width: 1024px) {
   .controls-container {
     left: 88%;
-    top: clamp(50px, 8vh, 90px);
+    top: 50%;
+    transform: translate(-50%, -50%);
     max-width: 200px;
-    max-height: 96vh;
+    max-height: 88vh;
   }
 }
 
@@ -577,9 +579,10 @@ body {
 @media (max-width: 1023px) and (min-width: 769px) {
   .controls-container {
     left: 86%;
-    top: clamp(50px, 8vh, 80px);
+    top: 50%;
+    transform: translate(-50%, -50%);
     max-width: 180px;
-    max-height: 96vh;
+    max-height: 88vh;
   }
 }
 
@@ -612,13 +615,13 @@ body {
   }
 
   .controls-container {
-    top: 30px;
+    top: 20px;
     left: auto;
     right: 16px;
     transform: none;
     gap: clamp(8px, 1.5vh, 12px);
     max-width: 180px;
-    max-height: 96vh;
+    max-height: 92vh;
   }
 
   .filter-toggle {
@@ -672,13 +675,13 @@ body {
   }
 
   .controls-container {
-    top: 24px;
+    top: 16px;
     left: auto;
     right: 10px;
     transform: none;
     gap: clamp(6px, 1.2vh, 10px);
     max-width: 160px;
-    max-height: 96vh;
+    max-height: 92vh;
   }
 
   .filter-toggle {
@@ -985,4 +988,180 @@ body {
 
 .narrative-intro-text.fade-out {
   opacity: 0;
+}
+
+/* ===== MEDIA QUERIES PARA ALTURA DE VIEWPORT ===== */
+/* Comprimir elementos SOLO cuando la altura disponible es MUY limitada */
+
+/* Pantallas con altura <= 750px - Compresión moderada */
+@media (max-height: 750px) {
+  .controls-container {
+    gap: clamp(6px, 1.2vh, 12px);
+    max-height: 90vh;
+  }
+
+  .filters-container {
+    gap: clamp(4px, 0.9vh, 7px);
+    padding: clamp(6px, 1vh, 9px);
+  }
+
+  .filter-checkboxes {
+    gap: clamp(3px, 0.7vh, 5px);
+  }
+
+  .checkbox-label {
+    font-size: clamp(9px, 1.1vh, 10px);
+    padding: 2px 9px;
+  }
+
+  .filter-title {
+    font-size: clamp(10px, 1.2vh, 11px);
+    margin-bottom: 2px;
+  }
+
+  .filter-reset-btn {
+    font-size: clamp(9px, 1.1vh, 10px);
+    padding: 3px 9px;
+    margin-top: 5px;
+  }
+
+  .narrative-btn {
+    font-size: clamp(10px, 1.2vh, 11px);
+    padding: 4px 11px;
+  }
+
+  .chart-legend {
+    font-size: clamp(9px, 1.1vh, 10px);
+  }
+
+  .legend-label {
+    font-size: clamp(9px, 1.1vh, 10px);
+  }
+}
+
+/* Pantallas con altura <= 650px - Compresión agresiva */
+@media (max-height: 650px) {
+  .controls-container {
+    gap: clamp(4px, 1vh, 8px);
+    max-height: 92vh;
+  }
+
+  .filters-container {
+    gap: clamp(3px, 0.7vh, 5px);
+    padding: clamp(5px, 0.9vh, 7px);
+  }
+
+  .filter-checkboxes {
+    gap: clamp(2px, 0.5vh, 4px);
+  }
+
+  .checkbox-label {
+    font-size: 9px;
+    padding: 2px 8px;
+  }
+
+  .filter-title {
+    font-size: 10px;
+    margin-bottom: 1px;
+  }
+
+  .filter-reset-btn {
+    font-size: 9px;
+    padding: 3px 8px;
+    margin-top: 4px;
+  }
+
+  .narrative-btn {
+    font-size: 10px;
+    padding: 4px 10px;
+  }
+
+  .chart-legend {
+    font-size: 9px;
+    padding: clamp(5px, 0.9vh, 7px) clamp(7px, 1.1vh, 9px);
+  }
+
+  .chart-legend.is-active {
+    margin-top: clamp(5px, 0.9vh, 9px);
+    padding: clamp(5px, 0.9vh, 7px) clamp(7px, 1.1vh, 9px);
+  }
+
+  .legend-label {
+    font-size: 9px;
+  }
+
+  .legend-item {
+    padding: 2px 0;
+    gap: 7px;
+  }
+
+  .legend-color-box {
+    width: 18px;
+  }
+}
+
+/* Pantallas con altura <= 550px - Casos extremos */
+@media (max-height: 550px) {
+  .controls-container {
+    gap: 3px;
+    max-height: 94vh;
+  }
+
+  .filters-container {
+    gap: 2px;
+    padding: 5px;
+  }
+
+  .filter-checkboxes {
+    gap: 1px;
+  }
+
+  .checkbox-label {
+    font-size: 8px;
+    padding: 1px 6px;
+  }
+
+  .filter-title {
+    font-size: 9px;
+    margin-bottom: 0;
+  }
+
+  .filter-reset-btn {
+    font-size: 8px;
+    padding: 2px 6px;
+    margin-top: 3px;
+  }
+
+  .narrative-btn {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  .chart-legend {
+    font-size: 8px;
+    padding: 4px 6px;
+  }
+
+  .chart-legend.is-active {
+    margin-top: 4px;
+    padding: 4px 6px;
+  }
+
+  .legend-label {
+    font-size: 8px;
+  }
+
+  .legend-item {
+    padding: 1px 0;
+    gap: 5px;
+  }
+
+  .legend-color-box {
+    width: 16px;
+    height: 2px;
+  }
+
+  .legend-section-title {
+    font-size: 8px;
+  }
 }
