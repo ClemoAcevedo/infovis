@@ -11,24 +11,33 @@ let heartbeatLowSynth = null;    // Sintetizador grave para el golpe 'lub'
 let heartbeatHighSynth = null;   // Sintetizador agudo para el golpe 'dub'
 let heartbeatCompressor = null;  // Compresor para dar cohesión al latido
 let heartbeatReverb = null;      // Reverb ligera para sensación orgánica
+let vaccinationSynth = null;     // Sintetizador tonal para vacunación (tono ascendente)
+let vaccinationReverb = null;    // Reverb para el sintetizador de vacunación
 let isAudioInitialized = false;
 let isPlaying = false;
 let playbackInterval = null;
 let playbackStartDate = null;
 let currentBpm = 60; // BPM actual para suavizado de transiciones
+let isVaccinationTonePlaying = false; // Flag para saber si el tono de vacunación está sonando
+
+// ===== VOZ EN OFF (WEB SPEECH API) =====
+let speechSynthesis = null;
+let narrativeVoice = null;
+let voiceQueue = []; // Cola de textos pendientes para narrar
 
 const PLAY_LABEL_DEFAULT = '▶ Sonificación';
 const PLAY_LABEL_STOP = '⏸ Detener';
 const PLAY_LABEL_DISABLED = '✕ Solo sin filtros';
 const NARRATIVE_LABEL_DEFAULT = '📖 Narrativa';
 const NARRATIVE_LABEL_STOP = '⏸ Detener';
-const NARRATIVE_LABEL_DISABLED = '✕ Solo sin filtros';
+const NARRATIVE_LABEL_DISABLED = 'Desactiva los filtros';
 const VACCINATION_COLOR = '#1f77b4';
 const MAX_PLAYBACK_DURATION_SECONDS = 60; // Duración máxima de la reproducción en segundos
 const SMOOTHING_WINDOW = 7; // Ventana para media móvil (debe ser impar)
 
 // ===== ESCALAS DE MAPEO DE DATOS A SONIDO =====
 let escalaLatidos = null;      // Escala: fallecidos → BPM aproximado del latido
+let escalaVacunacion = null;   // Escala: % vacunación → frecuencia/tono (Hz)
 
 // ===== REFERENCIAS A ELEMENTOS DEL DOM =====
 let playButton = null;
@@ -365,6 +374,228 @@ function playHeartbeat(time = Tone.now(), bpm = 80) {
   heartbeatHighSynth.triggerAttackRelease('E3', '16n', time + delay); // dub
 }
 
+/**
+ * Inicia el tono continuo de vacunación
+ * @param {Number} initialFrequency - Frecuencia inicial en Hz
+ */
+function startContinuousVaccinationTone(initialFrequency = 261.63) {
+  if (!vaccinationSynth || isVaccinationTonePlaying) {
+    return;
+  }
+
+  const sanitizedFrequency = Math.max(200, Math.min(2000, initialFrequency || 261.63));
+
+  // Iniciar el tono continuo (sin release automático)
+  vaccinationSynth.triggerAttack(sanitizedFrequency, Tone.now());
+  isVaccinationTonePlaying = true;
+  console.log(`🎵 Tono de vacunación iniciado en ${sanitizedFrequency.toFixed(1)} Hz`);
+}
+
+/**
+ * Actualiza la frecuencia del tono continuo de vacunación
+ * @param {Number} targetFrequency - Frecuencia objetivo en Hz
+ * @param {Number} rampTime - Tiempo de transición en segundos (por defecto 1 segundo para transiciones suaves)
+ */
+function updateVaccinationToneFrequency(targetFrequency, rampTime = 1.0) {
+  if (!vaccinationSynth || !isVaccinationTonePlaying) {
+    return;
+  }
+
+  const sanitizedFrequency = Math.max(200, Math.min(2000, targetFrequency || 440));
+
+  // Cambiar gradualmente a la nueva frecuencia con transición suave
+  vaccinationSynth.frequency.rampTo(sanitizedFrequency, rampTime);
+}
+
+/**
+ * Detiene el tono continuo de vacunación
+ */
+function stopContinuousVaccinationTone() {
+  if (!vaccinationSynth || !isVaccinationTonePlaying) {
+    return;
+  }
+
+  // Detener el tono con el release configurado (2 segundos)
+  vaccinationSynth.triggerRelease(Tone.now());
+  isVaccinationTonePlaying = false;
+  console.log(`🔇 Tono de vacunación detenido`);
+}
+
+/**
+ * Inicializa el sistema de voz en off (Web Speech API)
+ * Selecciona una voz en español latinoamericano masculina
+ */
+function initializeNarrativeVoice() {
+  if (typeof window.speechSynthesis === 'undefined') {
+    console.warn('⚠️ Web Speech API no disponible en este navegador');
+    return false;
+  }
+
+  speechSynthesis = window.speechSynthesis;
+
+  // Función para seleccionar la mejor voz disponible
+  const selectBestVoice = () => {
+    const voices = speechSynthesis.getVoices();
+
+    if (voices.length === 0) {
+      return null;
+    }
+
+    // Prioridad 1: Voz latinoamericana masculina (es-MX, es-CL, es-AR, es-CO, etc.)
+    const latinoMaleVoice = voices.find(voice =>
+      voice.lang.startsWith('es-') &&
+      !voice.lang.startsWith('es-ES') &&
+      voice.name.toLowerCase().includes('male')
+    );
+
+    if (latinoMaleVoice) {
+      console.log(`🎙️ Voz seleccionada: ${latinoMaleVoice.name} (${latinoMaleVoice.lang})`);
+      return latinoMaleVoice;
+    }
+
+    // Prioridad 2: Cualquier voz latinoamericana
+    const latinoVoice = voices.find(voice =>
+      voice.lang.startsWith('es-') &&
+      !voice.lang.startsWith('es-ES')
+    );
+
+    if (latinoVoice) {
+      console.log(`🎙️ Voz seleccionada: ${latinoVoice.name} (${latinoVoice.lang})`);
+      return latinoVoice;
+    }
+
+    // Prioridad 3: Cualquier voz en español
+    const spanishVoice = voices.find(voice => voice.lang.startsWith('es'));
+
+    if (spanishVoice) {
+      console.log(`🎙️ Voz seleccionada: ${spanishVoice.name} (${spanishVoice.lang})`);
+      return spanishVoice;
+    }
+
+    // Fallback: primera voz disponible
+    console.warn('⚠️ No se encontró voz en español, usando voz predeterminada');
+    return voices[0];
+  };
+
+  narrativeVoice = selectBestVoice();
+
+  // Si las voces aún no están cargadas, esperar al evento
+  if (!narrativeVoice) {
+    speechSynthesis.addEventListener('voiceschanged', () => {
+      narrativeVoice = selectBestVoice();
+    }, { once: true });
+  }
+
+  console.log('✅ Sistema de voz en off inicializado');
+  return true;
+}
+
+/**
+ * Genera texto narrativo a partir del contenido de una anotación/milestone
+ * Agrega contexto mínimo para hacer la narración más fluida
+ * @param {string} type - Tipo de elemento ('milestone', 'comment', 'annotation')
+ * @param {string|Array} originalText - Texto original de la anotación
+ * @param {string} id - ID del elemento (para casos especiales)
+ * @returns {string} Texto narrativo listo para leer
+ */
+function generateNarrativeText(type, originalText, id = '') {
+  // Unir arrays en un solo string
+  const text = Array.isArray(originalText) ? originalText.join(' ') : originalText;
+
+  // Generar texto narrativo según el tipo
+  switch (type) {
+    case 'milestone':
+      // "Inicio Vacunación" -> "Comienza la vacunación"
+      // "Inicio Refuerzo" -> "Comienza el refuerzo"
+      if (text.toLowerCase().includes('inicio vacunación')) {
+        return 'Comienza la campaña masiva de vacunación';
+      }
+      if (text.toLowerCase().includes('inicio refuerzo')) {
+        return 'Comienza la dosis de refuerzo';
+      }
+      // Fallback genérico
+      return text;
+
+    case 'comment':
+      // Contexto según el ID del comentario
+      if (id === 'yellow') {
+        // "Cuarentena total generalizada" -> "Se establece la cuarentena total generalizada"
+        return 'Se establece la cuarentena total generalizada';
+      }
+      if (id === 'blue') {
+        // "Baja vacunación y cepa Gamma" -> "Período de baja vacunación y cepa Gamma"
+        return 'Período de baja vacunación y la cepa Gamma';
+      }
+      if (id === 'violet') {
+        // "40–60% con 1 dosis e inmunidad natural" -> "La población alcanza 40 a 60% con una dosis, junto con inmunidad natural"
+        return 'La población alcanza entre 40 y 60 por ciento con una dosis, junto con inmunidad natural';
+      }
+      // Fallback: agregar "Se observa" al inicio
+      return `Se observa ${text.toLowerCase()}`;
+
+    case 'annotation':
+      // Para anotación de Ómicron (buscar con y sin acento)
+      if (text.toLowerCase().includes('ómicron') || text.toLowerCase().includes('omicron')) {
+        return 'Aparece la nueva cepa Ómicron, altamente contagiosa y con múltiples mutaciones';
+      }
+      // Fallback genérico
+      return text;
+
+    default:
+      return text;
+  }
+}
+
+/**
+ * Lee en voz alta un texto usando Web Speech API
+ * El volumen se configura alto para destacar sobre la sonificación
+ * @param {string} text - Texto a narrar
+ */
+function speakNarrative(text) {
+  if (!speechSynthesis || !text) {
+    return;
+  }
+
+  // Cancelar cualquier narración en curso para dar prioridad a la nueva
+  if (speechSynthesis.speaking) {
+    speechSynthesis.cancel();
+  }
+
+  const utterance = new SpeechSynthesisUtterance(text);
+
+  // Configurar la voz seleccionada
+  if (narrativeVoice) {
+    utterance.voice = narrativeVoice;
+  }
+
+  // Configuración de parámetros de voz
+  utterance.rate = 1.05;      // Ligeramente más rápido que lo normal (dramático pero no lento)
+  utterance.pitch = 0.95;     // Ligeramente más grave (más dramático)
+  utterance.volume = 1.0;     // Volumen máximo para destacar sobre sonificación
+
+  // Eventos para debug
+  utterance.onstart = () => {
+    console.log(`🎙️ Narrando: "${text}"`);
+  };
+
+  utterance.onerror = (event) => {
+    console.error('❌ Error en narración:', event.error);
+  };
+
+  // Reproducir la narración
+  speechSynthesis.speak(utterance);
+}
+
+/**
+ * Detiene toda narración en curso
+ */
+function stopNarrative() {
+  if (speechSynthesis && speechSynthesis.speaking) {
+    speechSynthesis.cancel();
+    console.log('🔇 Narración detenida');
+  }
+}
+
 function ensureVaccinationMarker() {
   const container = ensureChartContainer();
   if (container && !vaccinationMarker) {
@@ -414,38 +645,36 @@ function setPlayButtonState({ label, disabled, playing }) {
   }
 }
 
-function updatePlaybackAvailability() {
+export function updatePlaybackAvailability() {
   const comparisonActive = hasActiveAgeFilters(filterState);
 
-  if (!playButton) {
-    return;
-  }
+  // Actualizar botón de Sonificación (si existe)
+  if (playButton) {
+    if (comparisonActive) {
+      setPlayButtonState({
+        label: PLAY_LABEL_DISABLED,
+        disabled: true,
+        playing: false
+      });
 
-  // Actualizar botón de Sonificación
-  if (comparisonActive) {
-    setPlayButtonState({
-      label: PLAY_LABEL_DISABLED,
-      disabled: true,
-      playing: false
-    });
-
-    if (progressIndicator) {
-      progressIndicator.style.display = 'none';
+      if (progressIndicator) {
+        progressIndicator.style.display = 'none';
+      }
+    } else if (isNarrativePlaybackActive) {
+      // Si la narrativa está activa, deshabilitar el botón de sonificación
+      setPlayButtonState({
+        label: PLAY_LABEL_DEFAULT,
+        disabled: true,
+        playing: false
+      });
+    } else {
+      // Comportamiento normal: mostrar play/stop según estado
+      setPlayButtonState({
+        label: isPlaying ? PLAY_LABEL_STOP : PLAY_LABEL_DEFAULT,
+        disabled: false,
+        playing: isPlaying
+      });
     }
-  } else if (isNarrativePlaybackActive) {
-    // Si la narrativa está activa, deshabilitar el botón de sonificación
-    setPlayButtonState({
-      label: PLAY_LABEL_DEFAULT,
-      disabled: true,
-      playing: false
-    });
-  } else {
-    // Comportamiento normal: mostrar play/stop según estado
-    setPlayButtonState({
-      label: isPlaying ? PLAY_LABEL_STOP : PLAY_LABEL_DEFAULT,
-      disabled: false,
-      playing: isPlaying
-    });
   }
 
   // Actualizar botón de Narrativa
@@ -494,11 +723,14 @@ function refreshContextElements() {
     return;
   }
 
-  // Guardar el estado revealed actual para no perderlo
-  const previousRevealedState = new Map();
+  // Guardar el estado revealed Y narrated actual para no perderlo
+  const previousState = new Map();
   contextElements.forEach(item => {
     const dateKey = item.date ? item.date.getTime() : 'no-date';
-    previousRevealedState.set(dateKey, item.revealed);
+    previousState.set(dateKey, {
+      revealed: item.revealed,
+      narrated: item.narrated
+    });
   });
 
   const nodes = chartGroup.selectAll('.contextual-element').nodes();
@@ -508,16 +740,19 @@ function refreshContextElements() {
     const parsedDate = parseContextDateString(dateAttr);
     const dateKey = parsedDate ? parsedDate.getTime() : 'no-date';
 
-    // Mantener el estado revealed previo si existe, sino calcular nuevo
-    const wasRevealed = previousRevealedState.has(dateKey)
-      ? previousRevealedState.get(dateKey)
+    // Mantener el estado previo si existe, sino calcular nuevo
+    const prevState = previousState.get(dateKey);
+    const wasRevealed = prevState
+      ? prevState.revealed
       : (!(parsedDate instanceof Date) || !isPlaying);
+    const wasNarrated = prevState ? prevState.narrated : false;
 
     return {
       element: node,
       date: parsedDate,
       label: labelAttr,
-      revealed: wasRevealed
+      revealed: wasRevealed,
+      narrated: wasNarrated
     };
   });
 
@@ -548,6 +783,17 @@ function refreshContextElements() {
   }
 
   console.log(`🧭 Contextos registrados: ${contextElements.length}`);
+
+  // Debug: Mostrar todos los elementos contextuales con sus fechas
+  if (contextElements.length > 0) {
+    console.log('📋 Elementos contextuales:');
+    contextElements.forEach((item, index) => {
+      const type = item.element?.getAttribute('data-context-type') || 'unknown';
+      const label = item.label || 'sin label';
+      const dateStr = item.date ? item.date.toISOString().split('T')[0] : 'SIN FECHA';
+      console.log(`   ${index + 1}. [${type}] ${label} - Fecha: ${dateStr}`);
+    });
+  }
 }
 
 function resetContextElementsForPlayback() {
@@ -567,9 +813,12 @@ function resetContextElementsForPlayback() {
       item.element.classList.remove('contextual-hidden');
     }
   });
+
+  // Resetear flags de narraciones anticipadas
+  resetAnticipatedNarrations();
 }
 
-function revealContextElementsUpToDate(targetDate, silent = false) {
+function revealContextElementsUpToDate(targetDate, silent = false, previousDate = null) {
   if (!(targetDate instanceof Date) || Number.isNaN(targetDate.getTime())) {
     return;
   }
@@ -600,6 +849,110 @@ function revealContextElementsUpToDate(targetDate, silent = false) {
         const label = item.label || item.element?.getAttribute('class') || 'contexto';
         console.log(`📝 Contexto activado: ${label}`);
       }
+
+      // ===== VOZ EN OFF: Narrar el elemento revelado =====
+      // IMPORTANTE: No narrar aquí - se hace anticipadamente abajo
+    }
+  });
+
+  // ===== VOZ EN OFF ANTICIPADA: Narrar elementos antes de que aparezcan visualmente =====
+  // Anticipar todas las narraciones para mejor sincronización con los eventos visuales
+  if (isNarrativePlaybackActive && !silent) {
+    contextElements.forEach(item => {
+      // Solo procesar elementos que tienen fecha y aún no han sido narrados
+      if (!item.date) {
+        return; // Sin fecha, no se puede narrar anticipadamente
+      }
+
+      if (item.narrated) {
+        return; // Ya fue narrado, skip
+      }
+
+      // Calcular anticipación según el tipo de elemento
+      let anticipationDays = 3; // Anticipación por defecto (3 días)
+      const isOmicron = item.element?.classList.contains('omicron-annotation');
+
+      if (isOmicron) {
+        anticipationDays = 12; // Ómicron necesita más anticipación por el pico rápido
+      }
+
+      // Calcular fecha de narración anticipada
+      const narrationDate = new Date(item.date);
+      narrationDate.setDate(narrationDate.getDate() - anticipationDays);
+
+      // ESTRATEGIA MEJORADA: Verificar si la fecha de narración está en el rango
+      // entre el punto anterior y el punto actual (para manejar dataset reducido)
+      let shouldNarrate = false;
+
+      if (previousDate && previousDate instanceof Date) {
+        // Si tenemos fecha anterior, verificar si la fecha de narración está en el rango
+        // previousDate < narrationDate <= targetDate
+        if (previousDate < narrationDate && narrationDate <= targetDate) {
+          shouldNarrate = true;
+        }
+      } else {
+        // Fallback: verificar si debemos narrar ahora (comportamiento original)
+        if (targetDate >= narrationDate && targetDate < item.date) {
+          shouldNarrate = true;
+        }
+      }
+
+      if (shouldNarrate) {
+        // Marcar como narrado para evitar repetición
+        item.narrated = true;
+
+        // Extraer información del elemento
+        const contextType = item.element?.getAttribute('data-context-type') || '';
+        let originalText = '';
+        let elementId = '';
+
+        if (contextType === 'milestone') {
+          // Para milestones, extraer el texto de los elementos .milestone-text
+          const textElements = item.element?.querySelectorAll('.milestone-text');
+          if (textElements && textElements.length > 0) {
+            originalText = Array.from(textElements).map(el => el.textContent).join(' ');
+          }
+        } else if (contextType === 'comment' || contextType === 'annotation') {
+          // Para comments y annotations, extraer de los elementos de texto
+          const textElements = item.element?.querySelectorAll('text');
+          if (textElements && textElements.length > 0) {
+            originalText = Array.from(textElements).map(el => el.textContent).join(' ');
+          }
+
+          // Extraer el ID del comentario desde las clases (ej: "comment comment--yellow")
+          const classList = item.element?.getAttribute('class') || '';
+          const match = classList.match(/comment--(\w+)/);
+          if (match) {
+            elementId = match[1];
+          }
+        }
+
+        // Generar y reproducir el texto narrativo si hay contenido
+        if (originalText.trim()) {
+          const narrativeText = generateNarrativeText(contextType, originalText, elementId);
+          speakNarrative(narrativeText);
+
+          const anticipationLabel = isOmicron ? ' (anticipada 12 días)' : ' (anticipada 3 días)';
+          const dateLog = `Fecha objetivo: ${targetDate.toISOString().split('T')[0]}, Fecha narración: ${narrationDate.toISOString().split('T')[0]}, Fecha visual: ${item.date.toISOString().split('T')[0]}`;
+          console.log(`🎙️ Narración activada: "${originalText}"${anticipationLabel}`);
+          console.log(`   ${dateLog}`);
+        } else {
+          console.warn(`⚠️ Elemento sin texto para narrar:`, {
+            type: contextType,
+            label: item.label,
+            date: item.date.toISOString().split('T')[0]
+          });
+        }
+      }
+    });
+  }
+}
+
+// Función auxiliar para resetear flags de narración anticipada
+function resetAnticipatedNarrations() {
+  contextElements.forEach(item => {
+    if (item.narrated) {
+      delete item.narrated;
     }
   });
 }
@@ -665,11 +1018,16 @@ function setDeathsLineDimmed(isDimmed) {
       .style('opacity', 0.06);
     console.log('🔻 Línea de fallecidos atenuada durante sonificación');
   } else {
+    // Restaurar valores originales si están disponibles, sino usar valores predeterminados
+    const strokeToRestore = originalDeathsStroke || '#D43F3A';
+    const widthToRestore = originalDeathsStrokeWidth || 1.8;
+    const opacityToRestore = originalDeathsStrokeOpacity || 0.8;
+
     deathsLine
-      .attr('stroke', originalDeathsStroke)
-      .attr('stroke-width', originalDeathsStrokeWidth)
-      .attr('stroke-opacity', originalDeathsStrokeOpacity)
-      .style('opacity', originalDeathsStyleOpacity !== null ? originalDeathsStyleOpacity : null);
+      .attr('stroke', strokeToRestore)
+      .attr('stroke-width', widthToRestore)
+      .attr('stroke-opacity', opacityToRestore)
+      .style('opacity', null); // Remover estilo inline para permitir que CSS tome control
     console.log('🔺 Línea de fallecidos restaurada tras sonificación');
   }
 }
@@ -724,11 +1082,16 @@ function setVaccinationLineDimmed(isDimmed) {
       .style('opacity', 0.12);
     console.log('🔻 Línea de vacunación atenuada durante sonificación');
   } else {
+    // Restaurar valores originales si están disponibles, sino usar valores predeterminados
+    const strokeToRestore = originalVaccinationStroke || '#2C7FB8';
+    const widthToRestore = originalVaccinationStrokeWidth || 1.8;
+    const opacityToRestore = originalVaccinationStrokeOpacity || 0.8;
+
     vaccinationLine
-      .attr('stroke', originalVaccinationStroke)
-      .attr('stroke-width', originalVaccinationStrokeWidth)
-      .attr('stroke-opacity', originalVaccinationStrokeOpacity)
-      .style('opacity', originalVaccinationStyleOpacity !== null ? originalVaccinationStyleOpacity : null);
+      .attr('stroke', strokeToRestore)
+      .attr('stroke-width', widthToRestore)
+      .attr('stroke-opacity', opacityToRestore)
+      .style('opacity', null); // Remover estilo inline para permitir que CSS tome control
     console.log('🔺 Línea de vacunación restaurada tras sonificación');
   }
 }
@@ -748,6 +1111,9 @@ async function inicializarAudio() {
     // Iniciar contexto de audio de Tone.js
     await Tone.start();
     console.log('🎵 Contexto de audio iniciado correctamente');
+
+    // Inicializar sistema de voz en off
+    initializeNarrativeVoice();
 
     // ===== SINTETIZADORES DE LATIDO CARDÍACO =====
     heartbeatLowSynth = new Tone.MembraneSynth({
@@ -771,8 +1137,27 @@ async function inicializarAudio() {
     heartbeatHighSynth.connect(heartbeatCompressor);
     heartbeatCompressor.connect(heartbeatReverb);
 
+    // ===== SINTETIZADOR TONAL PARA VACUNACIÓN (TONO CONTINUO ASCENDENTE) =====
+    vaccinationSynth = new Tone.Synth({
+      oscillator: { type: 'sine' },  // Onda sinusoidal suave y agradable
+      envelope: {
+        attack: 0.1,    // Ataque corto para inicio inmediato
+        decay: 0.0,     // Sin decaimiento
+        sustain: 1,     // Sustain completo (tono continuo sin cambios de volumen)
+        release: 2.5    // Release largo para terminación muy suave
+      }
+    }).toDestination();
+
+    vaccinationReverb = new Tone.Reverb({
+      decay: 4.0,
+      wet: 0.2  // 20% reverb para dar profundidad sin saturar
+    }).toDestination();
+
+    vaccinationSynth.connect(vaccinationReverb);
+    vaccinationSynth.volume.value = -20; // Volumen bajo para tono continuo de fondo
+
     isAudioInitialized = true;
-    console.log('✅ Sintetizadores de latido configurados');
+    console.log('✅ Sintetizadores de latido y vacunación configurados');
 
   } catch (error) {
     console.error('❌ Error al inicializar audio:', error);
@@ -803,8 +1188,17 @@ function configurarEscalas(data) {
     .range([65, 200])  // BPM: pocas muertes = muy calmado (65), PICOS = pánico extremo (200)
     .clamp(true);
 
-  console.log('🎼 Escala de sonificación tipo latido configurada:');
+  // Vacunación: porcentaje más alto → tono más agudo (frecuencia ascendente)
+  // Mapeo de 0-100% a frecuencias musicales agradables
+  // Usando escala de Do mayor: C4 (261.63 Hz) a C6 (1046.50 Hz)
+  escalaVacunacion = d3.scaleLinear()
+    .domain([0, 100])  // 0% a 100% de vacunación
+    .range([261.63, 1046.50])  // C4 a C6 (dos octavas ascendentes)
+    .clamp(true);
+
+  console.log('🎼 Escalas de sonificación configuradas:');
   console.log(`   - Fallecidos: ${maxFallecidos} max → 65-200 BPM (contraste extremo)`);
+  console.log(`   - Vacunación: 0-100% → 261.63-1046.50 Hz (C4 a C6, tono ascendente)`);
 }
 
 /**
@@ -817,7 +1211,7 @@ function reproducirPunto(punto, duracion = 0.08) {
     return;
   }
 
-  // Solo reproducir si hay datos válidos de fallecidos y la serie está habilitada
+  // ===== RITMO: FALLECIDOS (Latido cardíaco) =====
   const deathsEnabled = !filterState || filterState.deaths !== false;
   // Usar valor suavizado si existe, sino usar el original
   const deathsValue = punto.deaths_7d_smooth != null ? punto.deaths_7d_smooth : punto.deaths_7d;
@@ -829,6 +1223,27 @@ function reproducirPunto(punto, duracion = 0.08) {
 
     const originalValue = punto.deaths_7d_original || punto.deaths_7d;
     console.log(`💓 Latido: ${Math.round(originalValue)} fallecidos (suavizado: ${Math.round(deathsValue)}) → ${Math.round(bpmObjetivo)} BPM`);
+  }
+
+  // ===== TONO CONTINUO: VACUNACIÓN (Actualizar frecuencia ascendente) =====
+  const vaccinationValue = punto.vaccinated_pct;
+
+  if (vaccinationValue != null && Number.isFinite(vaccinationValue) && vaccinationValue > 0) {
+    // Si el tono no está sonando aún, iniciarlo
+    if (!isVaccinationTonePlaying) {
+      const frequency = escalaVacunacion ? escalaVacunacion(vaccinationValue) : 261.63;
+      startContinuousVaccinationTone(frequency);
+    } else {
+      // Si ya está sonando, solo actualizar la frecuencia suavemente
+      const frequency = escalaVacunacion ? escalaVacunacion(vaccinationValue) : 440;
+      // Usar tiempo de rampa largo y constante para transición suave sin "beats"
+      updateVaccinationToneFrequency(frequency, 1.5);
+    }
+  } else {
+    // Si vacunación es 0 o inválida, detener el tono
+    if (isVaccinationTonePlaying) {
+      stopContinuousVaccinationTone();
+    }
   }
 }
 
@@ -936,6 +1351,15 @@ async function reproducirSonificacion() {
     currentBpm = 60;
   }
 
+  // NO iniciar el tono de vacunación aquí - se iniciará automáticamente
+  // cuando se encuentre el primer punto con vacunación > 0% en reproducirPunto()
+
+  // ===== VOZ EN OFF INICIAL: Solo en modo narrativa =====
+  if (isNarrativePlaybackActive) {
+    // Narrar el inicio de la pandemia (sin anotación visual)
+    speakNarrative('Marzo de 2020. Comienza la pandemia de COVID-19 en Chile');
+  }
+
   // ===== EVENTOS DE REPRODUCCIÓN CON INTERVALO DINÁMICO =====
   let indice = 0;
 
@@ -952,7 +1376,9 @@ async function reproducirSonificacion() {
       centerOnDateCallback(punto.date);
     }
 
-    revealContextElementsUpToDate(punto.date);
+    // Pasar la fecha anterior para detectar narraciones en el rango (importante para dataset reducido)
+    const previousDate = indice > 0 ? datosProcesados[indice - 1].date : null;
+    revealContextElementsUpToDate(punto.date, false, previousDate);
     if (punto.date instanceof Date && !Number.isNaN(punto.date.getTime())) {
       lastPlaybackDate = punto.date;
     }
@@ -1002,6 +1428,13 @@ function detenerReproduccion() {
     playbackInterval = null;
   }
 
+  // Detener el tono continuo de vacunación
+  stopContinuousVaccinationTone();
+  isVaccinationTonePlaying = false; // Asegurar que el flag se resetee
+
+  // Detener voz en off
+  stopNarrative();
+
   isPlaying = false;
   playbackStartDate = null;
   currentBpm = 60; // Reiniciar BPM para la próxima reproducción
@@ -1009,8 +1442,6 @@ function detenerReproduccion() {
   isNarrativePlaybackActive = false; // Desactivar flag de narrativa activa
   window.__disableZoom = false; // Rehabilitar zoom
   setFiltersLocked(false);
-  setDeathsLineDimmed(false);
-  setVaccinationLineDimmed(false);
   hideHighlightPath();
   hideDeathsMarker();
   hideVaccinationMarker();
@@ -1025,7 +1456,39 @@ function detenerReproduccion() {
   }
 
   if (narrativeWasActive) {
-    resetZoom().catch(() => {});
+    resetZoom().then(() => {
+      // Después de resetear el zoom, necesitamos esperar un frame para que el DOM se actualice
+      requestAnimationFrame(() => {
+        // Re-capturar referencias a las líneas con sus valores correctos
+        if (chartGroup && typeof chartGroup.select === 'function') {
+          const deathsLine = chartGroup.select('.line--deaths-general');
+          const vaccinationLine = chartGroup.select('.line--vaccination-general');
+
+          if (!deathsLine.empty()) {
+            deathsLine
+              .attr('stroke', '#d62728')
+              .attr('stroke-width', 1.8)
+              .attr('stroke-opacity', 0.8)
+              .style('opacity', null);
+          }
+
+          if (!vaccinationLine.empty()) {
+            vaccinationLine
+              .attr('stroke', '#1f77b4')
+              .attr('stroke-width', 1.8)
+              .attr('stroke-opacity', 0.8)
+              .style('opacity', null);
+          }
+        }
+        console.log('✅ Gráfico restaurado después de narrativa');
+      });
+    }).catch((error) => {
+      console.error('Error al resetear zoom:', error);
+    });
+  } else {
+    // Si no era narrativa, restaurar inmediatamente
+    setDeathsLineDimmed(false);
+    setVaccinationLineDimmed(false);
   }
 
   console.log('⏹️ Reproducción detenida');
@@ -1308,6 +1771,18 @@ export function updateSoundReferences(chartScales, filters, svgGroup = null, opt
   ensureDeathsMarker();
   ensureVaccinationMarker();
   refreshContextElements();
+
+  // Resetear colores originales para que se capturen los nuevos valores
+  // (importantes si hay filtros activos que cambien los colores a gris)
+  originalDeathsStroke = null;
+  originalDeathsStrokeWidth = null;
+  originalDeathsStrokeOpacity = null;
+  originalDeathsStyleOpacity = null;
+  originalVaccinationStroke = null;
+  originalVaccinationStrokeWidth = null;
+  originalVaccinationStrokeOpacity = null;
+  originalVaccinationStyleOpacity = null;
+
   setDeathsLineDimmed(isPlaying);
   setVaccinationLineDimmed(isPlaying);
 

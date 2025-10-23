@@ -31,18 +31,12 @@ body {
   box-sizing: border-box;
 }
 
-/* Narrative container - Botón de narrativa en lado izquierdo */
+/* Narrative container - Ahora dentro de controls-container */
 .narrative-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  position: absolute;
-  top: 20%;
-  left: 110px;
-  transform: translateY(-50%);
-  z-index: 200;
-  gap: 6px;
 }
 
 .narrative-btn {
@@ -57,20 +51,6 @@ body {
   font-weight: 400;
   transition: all 0.3s ease;
   white-space: nowrap;
-}
-
-.zoom-helper {
-  font-size: 9px;
-  color: #aaa;
-  text-align: center;
-  font-family: inherit;
-  white-space: nowrap;
-  opacity: 0.7;
-}
-
-#zoom-percentage {
-  font-weight: 500;
-  color: #999;
 }
 
 .narrative-btn:hover {
@@ -90,7 +70,7 @@ body {
   pointer-events: none;
 }
 
-/* Controls container - Contenedor general para sonificación y filtros */
+/* Controls container - Contenedor general para narrativa y filtros */
 .controls-container {
   display: flex;
   flex-direction: column;
@@ -100,7 +80,7 @@ body {
   margin: 0;
   padding: 0;
   position: absolute;
-  top: 20%;
+  top: 50%;
   right: 110px;
   transform: translateY(-50%);
   z-index: 200;
@@ -114,109 +94,21 @@ body {
   justify-content: center;
   gap: 8px;
   margin: 0;
-  padding: 0;
-}
-
-/* Botón toggle - ultra minimalista */
-.filter-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  max-width: 180px;
-  background: transparent;
-  border: 0.5px solid #e8e8e8;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-family: inherit;
-  color: #999;
-  font-size: 11px;
-  font-weight: 400;
-}
-
-.filter-toggle:hover {
-  border-color: #d0d0d0;
-  color: #666;
-}
-
-.filter-toggle-icon {
-  font-size: 11px;
-  opacity: 0.5;
-  flex: 0 0 auto;
-}
-
-.filter-toggle-text {
-  flex: 1 1 auto;
-  display: inline-block;
-  font-size: 11px;
-  letter-spacing: 0.2px;
-  text-align: center;
-  white-space: normal;
-  line-height: 1.3;
-}
-
-.filter-toggle.locked {
-  border-color: #e4e4e4;
-  color: #bbb;
-  cursor: not-allowed;
-  background: #fafafa;
-}
-
-.filter-toggle.locked .filter-toggle-icon,
-.filter-toggle.locked .filter-toggle-arrow {
-  opacity: 0.3;
-}
-
-.filter-toggle-arrow {
-  font-size: 8px;
-  transition: transform 0.15s ease;
-  opacity: 0.4;
-  flex: 0 0 auto;
-}
-
-.filter-toggle.active {
-  border-color: #ccc;
-}
-
-.filter-toggle.active .filter-toggle-arrow {
-  transform: rotate(180deg);
-}
-
-/* Dropdown */
-.filter-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translate(-50%, -6px);
+  padding: 10px;
   background: rgba(255, 255, 255, 0.97);
   border: 1px solid #e8e8e8;
   border-radius: 10px;
-  padding: 0 10px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
-  width: max-content;
-  min-width: 160px;
-  text-align: left;
-  max-width: min(90vw, 420px);
-  pointer-events: none;
-  z-index: 210;
-  transition: max-height 0.3s ease, opacity 0.2s ease, transform 0.2s ease;
-  opacity: 0;
-  max-height: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.filter-dropdown.open {
-  opacity: 1;
-  max-height: 400px;
-  padding: 6px 10px;
-  pointer-events: auto;
-  transform: translate(-50%, 0);
-  overflow-y: auto;
-}
-
-.filter-dropdown.locked {
-  pointer-events: none;
+/* Título de filtros */
+.filter-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: #666;
+  margin-bottom: 2px;
+  text-align: center;
+  letter-spacing: 0.2px;
 }
 
 .filter-checkboxes {
@@ -327,9 +219,9 @@ body {
 }
 
 #filter-age-50-59:checked + .checkbox-label {
-  background: #228833;
-  border-color: #228833;
-  color: white;
+  background: #DDAA33;
+  border-color: #DDAA33;
+  color: #333; /* Texto oscuro para mejor contraste en naranja */
   font-weight: 500;
   border-width: 1px;
 }
@@ -343,8 +235,8 @@ body {
 }
 
 #filter-age-70-79:checked + .checkbox-label {
-  background: #EE6677;
-  border-color: #EE6677;
+  background: #CC6677;
+  border-color: #CC6677;
   color: white;
   font-weight: 500;
   border-width: 1px;
@@ -524,18 +416,10 @@ body {
 }
 
 /* Solo aplicar a líneas generales, no a grupos etarios */
-.line--deaths-general {
-  stroke: #D43F3A;
-}
-
 .line--deaths-general.sonification-dimmed {
   stroke: rgba(212, 63, 58, 0.12) !important;
   opacity: 0.08 !important;
   stroke-width: 1.2px !important;
-}
-
-.line--vaccination-general {
-  stroke: #2C7FB8;
 }
 
 .contextual-element {
@@ -688,19 +572,9 @@ body {
     font-size: 10px;
   }
 
-  .narrative-container {
-    top: 14px;
-    left: 16px;
-    transform: none;
-  }
-
   .narrative-btn {
     font-size: 10px;
     padding: 4px 10px;
-  }
-
-  .zoom-helper {
-    font-size: 8px;
   }
 
   .controls-container {
@@ -708,11 +582,6 @@ body {
     right: 16px;
     transform: none;
     gap: 12px;
-  }
-
-  .sound-play-btn {
-    font-size: 10px;
-    padding: 4px 10px;
   }
 
   .filter-toggle {
@@ -765,29 +634,15 @@ body {
     font-size: 11px;
   }
 
-  .narrative-container {
-    top: 10px;
-    left: 10px;
-  }
-
   .narrative-btn {
     font-size: 9px;
     padding: 3px 8px;
-  }
-
-  .zoom-helper {
-    font-size: 7px;
   }
 
   .controls-container {
     top: 10px;
     right: 10px;
     gap: 10px;
-  }
-
-  .sound-play-btn {
-    font-size: 9px;
-    padding: 3px 8px;
   }
 
   .filter-toggle {
@@ -823,14 +678,6 @@ body {
 
 /* High contrast mode support */
 @media (prefers-contrast: high) {
-  .line--deaths-general {
-    stroke-width: 3;
-  }
-
-  .line--vaccination-general {
-    stroke-width: 3;
-  }
-
   /* Grupos etarios también */
   .line {
     stroke-width: 3;

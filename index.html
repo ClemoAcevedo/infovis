@@ -21,58 +21,44 @@
             <div class="chart-legend" id="chart-legend" style="display: none;">
                 <!-- La leyenda se generará dinámicamente -->
             </div>
-            <div class="narrative-container">
-                <button class="narrative-btn" id="narrative-btn" title="Ver narrativa completa desde el inicio de la pandemia">
-                    📖 Narrativa
-                </button>
-                <div class="zoom-helper" id="zoom-helper">
-                    prueba hacer zoom o deslizar <span id="zoom-percentage">100%</span>
-                </div>
-            </div>
             <div class="controls-container">
-                <div class="sound-controls">
-                    <button class="sound-play-btn" id="sound-play-btn" title="Reproducir sonificación de datos">
-                        ▶ Sonificación
+                <div class="narrative-container">
+                    <button class="narrative-btn" id="narrative-btn" title="Ver narrativa completa desde el inicio de la pandemia">
+                        📖 Narrativa
                     </button>
                 </div>
                 <div class="filters-container">
-                    <button class="filter-toggle" id="filter-toggle">
-                        <span class="filter-toggle-icon">⚙</span>
-                        <span class="filter-toggle-text">Comparar grupos etarios</span>
-                        <span class="filter-toggle-arrow">▼</span>
-                    </button>
-                    <div class="filter-dropdown" id="filter-dropdown" style="display: none;">
-                        <div class="filter-checkboxes">
-                            <label class="filter-checkbox">
-                                <input type="checkbox" id="filter-age-0-39">
-                                <span class="checkbox-label age-label">≤39</span>
-                            </label>
-                            <label class="filter-checkbox">
-                                <input type="checkbox" id="filter-age-40-49">
-                                <span class="checkbox-label age-label">40-49</span>
-                            </label>
-                            <label class="filter-checkbox">
-                                <input type="checkbox" id="filter-age-50-59">
-                                <span class="checkbox-label age-label">50-59</span>
-                            </label>
-                            <label class="filter-checkbox">
-                                <input type="checkbox" id="filter-age-60-69">
-                                <span class="checkbox-label age-label">60-69</span>
-                            </label>
-                            <label class="filter-checkbox">
-                                <input type="checkbox" id="filter-age-70-79">
-                                <span class="checkbox-label age-label">70-79</span>
-                            </label>
-                            <label class="filter-checkbox">
-                                <input type="checkbox" id="filter-age-80-89">
-                                <span class="checkbox-label age-label">80-89</span>
-                            </label>
-                            <label class="filter-checkbox">
-                                <input type="checkbox" id="filter-age-90-plus">
-                                <span class="checkbox-label age-label">≥90</span>
-                            </label>
-                            <button class="filter-reset-btn" id="filter-reset-btn">Resetear Filtros</button>
-                        </div>
+                    <div class="filter-title">Comparar grupos etarios</div>
+                    <div class="filter-checkboxes">
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filter-age-0-39">
+                            <span class="checkbox-label age-label">≤39</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filter-age-40-49">
+                            <span class="checkbox-label age-label">40-49</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filter-age-50-59">
+                            <span class="checkbox-label age-label">50-59</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filter-age-60-69">
+                            <span class="checkbox-label age-label">60-69</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filter-age-70-79">
+                            <span class="checkbox-label age-label">70-79</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filter-age-80-89">
+                            <span class="checkbox-label age-label">80-89</span>
+                        </label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filter-age-90-plus">
+                            <span class="checkbox-label age-label">≥90</span>
+                        </label>
+                        <button class="filter-reset-btn" id="filter-reset-btn">Resetear Filtros</button>
                     </div>
                 </div>
             </div>

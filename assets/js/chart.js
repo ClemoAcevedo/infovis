@@ -13,7 +13,7 @@ import {
   debounce,
   validateData
 } from './utils.js';
-import { initSound, onHoverPoint, updateSoundReferences, cleanupSound, isSonificationPlaying } from './sound.js';
+import { initSound, onHoverPoint, updateSoundReferences, cleanupSound, isSonificationPlaying, updatePlaybackAvailability } from './sound.js';
 
 // Global chart state
 let chartSvg, chartGroup, scales, chartData;
@@ -248,16 +248,15 @@ export function drawLines(svg, data, scales, config) {
 
   // Verificar si hay grupos seleccionados
   const hasSelectedGroups = AGE_GROUPS.some(group => filterState[group]);
-  const generalOpacity = hasSelectedGroups ? 0.3 : 1; // Tenue si hay grupos seleccionados
 
   // Fallecidos población general
   linesGroup.append('path')
     .datum(data)
     .attr('class', 'line line--deaths line--deaths-general')
     .attr('fill', 'none')
-    .attr('stroke', COLORS.deaths)
+    .attr('stroke', hasSelectedGroups ? '#999999' : COLORS.deaths)
     .attr('stroke-width', deathsStyle.strokeWidth)
-    .attr('stroke-opacity', deathsStyle.strokeOpacity * generalOpacity)
+    .attr('stroke-opacity', hasSelectedGroups ? 0.1 : deathsStyle.strokeOpacity)
     .attr('d', deathsLineGeneral);
 
   // Vacunación población general
@@ -265,9 +264,9 @@ export function drawLines(svg, data, scales, config) {
     .datum(data)
     .attr('class', 'line line--vaccination line--vaccination-general')
     .attr('fill', 'none')
-    .attr('stroke', COLORS.vaccination)
+    .attr('stroke', hasSelectedGroups ? '#999999' : COLORS.vaccination)
     .attr('stroke-width', LINE_STYLES.vaccination.strokeWidth)
-    .attr('stroke-opacity', LINE_STYLES.vaccination.strokeOpacity * generalOpacity)
+    .attr('stroke-opacity', hasSelectedGroups ? 0.1 : LINE_STYLES.vaccination.strokeOpacity)
     .attr('d', vaccinationLineGeneral);
 
   // ===== 2. DIBUJAR LÍNEAS POR GRUPO ETARIO SELECCIONADO =====
@@ -749,6 +748,9 @@ function updateSeriesVisibility() {
 
   // Simplemente redibujar todo el gráfico cuando cambian los filtros
   redrawChart();
+
+  // Actualizar disponibilidad de botones (narrativa/sonificación)
+  updatePlaybackAvailability();
 }
 
 /**
@@ -809,45 +811,8 @@ function redrawChart() {
 export function setFiltersLocked(isLocked) {
   filtersLocked = !!isLocked;
 
-  const toggleBtn = document.getElementById('filter-toggle');
-  const dropdown = document.getElementById('filter-dropdown');
   const resetBtn = document.getElementById('filter-reset-btn');
   const checkboxes = Object.keys(FILTER_ID_TO_GROUP).map(id => document.getElementById(id));
-
-  if (toggleBtn) {
-    const textSpan = toggleBtn.querySelector('.filter-toggle-text');
-    if (!filterToggleDefaultText && textSpan) {
-      filterToggleDefaultText = textSpan.textContent.trim();
-    }
-
-    if (filtersLocked) {
-      toggleBtn.classList.remove('active');
-    }
-
-    toggleBtn.disabled = filtersLocked;
-    toggleBtn.classList.toggle('locked', filtersLocked);
-    if (filtersLocked) {
-      toggleBtn.setAttribute('aria-disabled', 'true');
-      toggleBtn.title = FILTER_LOCK_MESSAGE;
-    } else {
-      toggleBtn.removeAttribute('aria-disabled');
-      toggleBtn.title = filterToggleDefaultText || 'Comparar grupos etarios';
-    }
-
-    if (textSpan) {
-      textSpan.textContent = filtersLocked
-        ? FILTER_LOCK_MESSAGE
-        : (filterToggleDefaultText || 'Comparar grupos etarios');
-    }
-  }
-
-  if (dropdown) {
-    if (filtersLocked) {
-      dropdown.classList.remove('open');
-      dropdown.style.display = 'none';
-    }
-    dropdown.classList.toggle('locked', filtersLocked);
-  }
 
   checkboxes.forEach(checkbox => {
     if (!checkbox) return;
@@ -868,32 +833,6 @@ export function setFiltersLocked(isLocked) {
  * Configura los filtros de series
  */
 function setupFilters() {
-  // ===== TOGGLE DEL DROPDOWN =====
-  const toggleBtn = document.getElementById('filter-toggle');
-  const dropdown = document.getElementById('filter-dropdown');
-
-  if (toggleBtn && dropdown) {
-    toggleBtn.addEventListener('click', () => {
-      if (filtersLocked) {
-        return;
-      }
-
-      const isOpen = dropdown.classList.contains('open');
-
-      if (isOpen) {
-        dropdown.classList.remove('open');
-        toggleBtn.classList.remove('active');
-        dropdown.style.display = 'none';
-      } else {
-        dropdown.style.display = 'block';
-        setTimeout(() => {
-          dropdown.classList.add('open');
-          toggleBtn.classList.add('active');
-        }, 10);
-      }
-    });
-  }
-
   // ===== EVENTOS DE CHECKBOX PARA GRUPOS ETARIOS =====
   Object.entries(FILTER_ID_TO_GROUP).forEach(([filterId, group]) => {
     const checkbox = document.getElementById(filterId);

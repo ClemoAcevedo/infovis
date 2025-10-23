@@ -25,13 +25,13 @@ export const COLORS = {
     secondary: '#BBB',
     tertiary: '#CCC'
   },
-  // Colores por grupo etario - paleta colorblind-safe usando esquema de Paul Tol
+  // Colores por grupo etario - paleta colorblind-safe mejorada (evita rojo-verde problemático)
   ageGroups: {
     '<=39': '#4477AA',      // Azul (jóvenes) - colorblind-safe
     '40-49': '#66CCEE',     // Cyan - colorblind-safe
-    '50-59': '#228833',     // Verde - colorblind-safe
+    '50-59': '#DDAA33',     // Naranja/dorado - evita verde problemático para daltónicos
     '60-69': '#CCBB44',     // Amarillo - colorblind-safe
-    '70-79': '#EE6677',     // Rosa/rojo claro - colorblind-safe
+    '70-79': '#CC6677',     // Marrón rosado - evita rojo brillante problemático
     '80-89': '#AA3377',     // Púrpura - colorblind-safe
     '>=90': '#BBBBBB'       // Gris (mayores) - colorblind-safe
   }
