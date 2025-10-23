@@ -22,6 +22,7 @@ let chartSvg, chartGroup, scales, chartData;
 let zoomBehavior = null;
 let currentTransform = d3.zoomIdentity;
 let originalXScale = null;
+let savedTransformBeforeNarrative = null; // Para restaurar el zoom después de la narrativa
 
 // ===== ESTADO GLOBAL DE FILTROS =====
 // Grupos etarios disponibles
@@ -714,6 +715,37 @@ function updateLegend() {
 
   legendContainer.classList.add('is-active');
   legendContainer.setAttribute('aria-hidden', 'false');
+}
+
+/**
+ * Actualiza solo los estilos de las líneas de población general según el estado de filtros
+ * (sin redibujar todo el gráfico - útil para restauración después de narrativa)
+ */
+export function refreshGeneralLinesStyles() {
+  if (!chartGroup) {
+    console.warn('refreshGeneralLinesStyles: chartGroup no disponible');
+    return;
+  }
+
+  const hasSelectedGroups = AGE_GROUPS.some(group => filterState[group]);
+
+  // Actualizar línea de fallecidos población general
+  const deathsLine = chartGroup.select('.line--deaths-general');
+  if (!deathsLine.empty()) {
+    deathsLine
+      .attr('stroke', hasSelectedGroups ? '#999999' : COLORS.deaths)
+      .attr('stroke-opacity', hasSelectedGroups ? 0.1 : LINE_STYLES.deaths.strokeOpacity);
+  }
+
+  // Actualizar línea de vacunación población general
+  const vaccinationLine = chartGroup.select('.line--vaccination-general');
+  if (!vaccinationLine.empty()) {
+    vaccinationLine
+      .attr('stroke', hasSelectedGroups ? '#999999' : COLORS.vaccination)
+      .attr('stroke-opacity', hasSelectedGroups ? 0.1 : LINE_STYLES.vaccination.strokeOpacity);
+  }
+
+  console.log('🎨 Estilos de líneas de población general actualizados');
 }
 
 /**
@@ -1502,7 +1534,7 @@ function setupZoom(svg, config) {
  * Resetea el zoom a la vista completa
  * @returns {Promise} Promesa que se resuelve cuando la transición termina
  */
-export function resetZoom() {
+export function resetZoom(targetTransform = null) {
   return new Promise((resolve) => {
     if (!chartSvg || !zoomBehavior) {
       console.warn('⚠️ No se puede resetear zoom: componentes no inicializados');
@@ -1510,14 +1542,28 @@ export function resetZoom() {
       return;
     }
 
+    // Si hay una transformación guardada, usarla; de lo contrario, resetear a identity
+    const transform = targetTransform || d3.zoomIdentity;
+    const action = targetTransform ? 'restaurado al estado previo' : 'reseteado';
+
     chartSvg.transition()
       .duration(750)
-      .call(zoomBehavior.transform, d3.zoomIdentity)
+      .call(zoomBehavior.transform, transform)
       .on('end', () => {
-        console.log('🔄 Zoom reseteado');
+        console.log(`🔄 Zoom ${action}`);
         resolve();
       });
   });
+}
+
+/**
+ * Recupera y limpia el zoom guardado antes de la narrativa
+ * @returns {Object|null} La transformación guardada o null
+ */
+export function getSavedNarrativeTransform() {
+  const saved = savedTransformBeforeNarrative;
+  savedTransformBeforeNarrative = null; // Limpiar después de recuperar
+  return saved;
 }
 
 /**
@@ -1532,6 +1578,10 @@ export function zoomToNarrativeStart() {
       resolve();
       return;
     }
+
+    // Guardar el zoom actual para poder restaurarlo después de la narrativa
+    savedTransformBeforeNarrative = currentTransform;
+    console.log('💾 Zoom actual guardado:', savedTransformBeforeNarrative);
 
     // Definir fechas del período narrativo (primeros 9 meses de la pandemia)
     const narrativeStartDate = d3.timeParse('%Y-%m-%d')('2020-04-09'); // Primer dato

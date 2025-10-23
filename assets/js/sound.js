@@ -3,7 +3,7 @@
  * Convierte valores cuantitativos en feedback auditivo
  */
 
-import { resetZoom, zoomToNarrativeStart, setFiltersLocked } from './chart.js';
+import { resetZoom, zoomToNarrativeStart, setFiltersLocked, getSavedNarrativeTransform, refreshGeneralLinesStyles } from './chart.js';
 
 // ===== CONFIGURACIÓN DE AUDIO =====
 let audioContext = null;
@@ -1564,9 +1564,20 @@ function detenerReproduccion() {
   setDeathsLineDimmed(false);
   setVaccinationLineDimmed(false);
 
+  // Actualizar estilos de las líneas según el estado actual de filtros
+  // Esto asegura que si había filtros activos antes de la narrativa,
+  // las líneas vuelvan a su estado correcto (gris si hay filtros, colores si no)
+  refreshGeneralLinesStyles();
+
   if (narrativeWasActive) {
-    resetZoom().then(() => {
-      console.log('✅ Gráfico restaurado después de narrativa');
+    // Recuperar el zoom guardado antes de la narrativa
+    const savedTransform = getSavedNarrativeTransform();
+    resetZoom(savedTransform).then(() => {
+      if (savedTransform) {
+        console.log('✅ Gráfico restaurado al estado previo de la narrativa');
+      } else {
+        console.log('✅ Gráfico restaurado a vista completa');
+      }
     }).catch((error) => {
       console.error('Error al resetear zoom:', error);
     });
