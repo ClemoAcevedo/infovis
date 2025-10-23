@@ -111,11 +111,152 @@ También puedes usar cualquier servidor estático (Live Server en VS Code, `npx 
 - Revisa la experiencia en desktop y mobile; los controles se reposicionan y el dropdown pasa a ocupar todo el ancho disponible.
 - Antes de publicar, prueba narrativa + sonificación completa para verificar que el zoom se restablece y los filtros se desbloquean.
 
+## Feedback del Profesor e Iteraciones Implementadas
+
+A continuación se documenta el feedback recibido del profesor y las decisiones de implementación tomadas:
+
+### ✅ Cambios Implementados
+
+#### 1. **Botones Directos para Grupos Etarios**
+**Feedback:** *"Recomiendo reemplazar el menú desplegable actual por botones directos para los grupos etarios. Esto elimina un clic innecesario y presenta las opciones de forma más intuitiva."*
+
+**Implementación:**
+- Se eliminó el botón desplegable `⚙ Comparar grupos etarios`
+- Los checkboxes de grupos etarios ahora están **siempre visibles** en la interfaz
+- Se mantiene el diseño compacto con checkboxes estilizados que muestran los colores de cada grupo
+- Incluye botón "Resetear Filtros" para limpiar todas las selecciones
+
+**Archivos modificados:**
+- `index.html`: Estructura HTML de filtros siempre visible
+- `assets/css/styles.css`: Estilos para contenedor siempre visible
+
+#### 2. **Visualización con Fondo Gris Transparente**
+**Feedback:** *"Cuando se selecciona una edad, la visualización actual se torna confusa y se mezcla con el fondo. Sugiero que, al realizar una selección, el fondo se muestre en un gris claro y transparente."*
+
+**Implementación:**
+- Cuando se selecciona uno o más grupos etarios, las líneas de **población general** se muestran en gris (`#999999`) con opacidad muy baja (`0.1`)
+- Esto permite ver el contexto general mientras se destacan las líneas de los grupos seleccionados
+- Las líneas de grupos etarios seleccionados mantienen sus colores originales con opacidad completa
+
+**Archivos modificados:**
+- `assets/js/chart.js`: Lógica condicional en `drawLines()` para aplicar gris/transparente cuando hay filtros activos
+- `assets/css/styles.css`: Se eliminaron reglas CSS que forzaban colores específicos para permitir control total desde JavaScript
+
+#### 3. **Paleta Colorblind-Safe**
+**Feedback:** *"Eviten el uso de rojo (70-79) y verde (50-59), y consideren paletas de colores más seguras para personas daltónicas."*
+
+**Implementación:**
+- Se adoptó la paleta **Paul Tol** colorblind-safe
+- Cambios específicos:
+  - `50-59`: De verde `#228833` → Naranja/dorado `#DDAA33`
+  - `70-79`: De coral rojo `#EE6677` → Marrón rosado `#CC6677`
+- Todos los grupos ahora usan colores distinguibles para personas con daltonismo
+
+**Archivos modificados:**
+- `assets/js/config.js`: Array `COLORS.ageGroups` actualizado
+- `assets/css/styles.css`: Colores de checkboxes actualizados
+
+#### 4. **Eliminación del Botón de Sonificación**
+**Feedback:** *"Percibo que el botón de sonificación actual no añade una diferencia significativa, por lo que sugiero eliminarlo y mantener únicamente la narrativa."*
+
+**Implementación:**
+- Se eliminó completamente el botón `▶ Sonificación`
+- Se mantuvo únicamente el botón `📖 Narrativa` como experiencia principal
+- La narrativa integra toda la funcionalidad de sonificación (heartbeat + tono de vacunación + voz en off)
+
+**Archivos modificados:**
+- `index.html`: Eliminado botón de sonificación del DOM
+- `assets/css/styles.css`: Limpieza de estilos relacionados
+
+#### 5. **Voz en Off Narrativa**
+**Feedback:** *"La narrativa podría enriquecerse. Por ejemplo, se podría integrar una voz en off que indique momentos clave, como 'comienzan los muertos', 'cuarentena total generalizada' o 'inicio de vacunación'."*
+
+**Implementación:**
+- Sistema completo de **voz en off usando Web Speech API**
+- Voz masculina en español latinoamericano (prioriza voces de es-MX, es-CL, es-AR, etc.)
+- Narración anticipada: la voz se activa **antes** de que aparezcan las anotaciones visuales para mejor sincronización
+  - Elementos regulares: 3 días de anticipación
+  - Ómicron: 12 días de anticipación (por el pico rápido)
+- Textos narrativos contextualizados:
+  - *"Marzo de 2020. Comienza la pandemia de COVID-19 en Chile"* (narración inicial)
+  - *"Se establece la cuarentena total generalizada"*
+  - *"Comienza la campaña masiva de vacunación"*
+  - *"Período de baja vacunación y la cepa Gamma"*
+  - *"Comienza la dosis de refuerzo"*
+  - *"La población alcanza entre 40 y 60 por ciento con una dosis..."*
+  - *"Aparece la nueva cepa Ómicron..."*
+- Configuración de voz: rate `1.05`, pitch `0.95`, volume `1.0` (máximo para destacar)
+- Sistema robusto que maneja dataset reducido (~120 puntos) verificando rangos entre puntos consecutivos
+
+**Archivos modificados:**
+- `assets/js/sound.js`: Funciones completas de síntesis de voz, generación de textos narrativos, sincronización con elementos contextuales
+
+#### 6. **Sonido para Vacunación (Tono Ascendente)**
+**Feedback:** *"Sería interesante complementar esto incorporando otro sonido al inicio de las vacunaciones, quizás un tono ascendente que aumente a medida que progresa la vacunación. La combinación de ritmo (fallecidos) y tono (vacunación) podría funcionar muy bien."*
+
+**Implementación:**
+- Sintetizador tonal continuo usando `Tone.Synth` con onda sinusoidal suave
+- Frecuencia asciende de **C4 (261.63 Hz) a C6 (1046.50 Hz)** mapeando 0-100% de vacunación
+- Tono **verdaderamente continuo** (no por beats):
+  - Usa `triggerAttack()` sin release automático
+  - Transiciones suaves con `frequency.rampTo()` (1.5 segundos)
+  - Envelope: `attack: 0.1`, `decay: 0.0`, `sustain: 1`, `release: 2.5`
+- Tono se inicia **solo cuando vacunación > 0%**, permanece silencioso en 0%
+- Volumen bajo (`-20 dB`) para funcionar como "fondo" del heartbeat y la voz
+- Reverb ligero (20% wet) para profundidad
+
+**Archivos modificados:**
+- `assets/js/sound.js`: Sintetizador de vacunación, funciones de control de tono continuo
+
+### ❌ Cambios NO Implementados (con Justificación)
+
+#### 1. **Direct Labels para Líneas de Grupos Etarios**
+**Feedback:** *"Al seleccionar una edad, sería más claro posicionar las leyendas directamente cerca de cada línea, utilizando 'direct labels'."*
+
+**Justificación para NO implementar:**
+- Cuando se activan **múltiples grupos etarios simultáneamente** (especialmente los 7), las líneas de fallecidos tienden a superponerse significativamente
+- Direct labels en líneas superpuestas crearían **clutter visual** y dificultarían la lectura
+- La solución actual (checkboxes con colores + tooltip interactivo) proporciona:
+  - Identificación clara del color de cada grupo
+  - Información precisa bajo demanda vía tooltip
+  - Interfaz limpia incluso con todos los filtros activos
+
+**Decisión:** Mantener la identificación por colores en checkboxes + tooltips interactivos.
+
+#### 2. **Eliminación Completa de Zoom y Panning**
+**Feedback:** *"Zoom y deslizar me parece realmente no necesario, no agrega nada. Lo sacaría completamente."*
+
+**Justificación para NO implementar:**
+- El zoom/panning es **muy útil cuando múltiples grupos etarios están activos**:
+  - Permite inspeccionar períodos específicos donde las líneas se superponen
+  - Facilita el análisis detallado de divergencias entre grupos
+  - Ayuda a explorar picos y valles en rangos temporales reducidos
+- La narrativa automáticamente maneja el zoom (focus inicial + reset final), por lo que no interfiere con la experiencia guiada
+- Para usuarios que solo usan la narrativa, el zoom nunca se interpone (se bloquea durante reproducción)
+- Casos de uso válidos:
+  - Comparar exactamente cuándo cada grupo alcanzó cierto % de vacunación
+  - Analizar la magnitud relativa de picos de fallecidos por grupo en olas específicas
+
+**Decisión:** Mantener zoom/panning como característica opcional para análisis exploratorio avanzado.
+
+### Resumen de Implementación
+
+De **6 recomendaciones principales** del profesor:
+- ✅ **6 implementadas completamente** (botones directos, fondo gris, paleta colorblind, eliminación de sonificación simple, voz en off, tono de vacunación)
+- ❌ **2 no implementadas por razones técnicas/UX** (direct labels, eliminación de zoom)
+
+El resultado es una narrativa **significativamente enriquecida** que combina:
+- 🎙️ **Voz en off dramática** narrando momentos clave
+- 💓 **Heartbeat dinámico** (65-200 BPM) reflejando fallecidos
+- 🎵 **Tono ascendente continuo** (C4-C6) reflejando progreso de vacunación
+- 🎨 **Visualización accesible** con paleta colorblind-safe y controles intuitivos
+
 ## Créditos y fuentes
 
 - Datos: Observatorio Social del Ministerio de Ciencia, Tecnología, Conocimiento e Innovación de Chile — https://observa.minciencia.gob.cl/
 - Sonificación: Tone.js (MIT License).
 - Visualización: D3.js v7.
+- Voz en off: Web Speech API (navegador).
 
 ---
 
