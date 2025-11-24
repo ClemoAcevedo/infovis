@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Control Físico</title>
+</head>
+<body>
+<h2>Control físico — Vacunación</h2>
+<p>Inclina el celular para controlar la visualización.</p>
+<button id="permit">Permitir sensor</button>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+
+// --- Firebase Config del usuario ---
+const firebaseConfig = {
+  apiKey: "AIzaSyCmYBbVb9DvxYVrJtXxPNITGhpJvy50bbE",
+  authDomain: "fisicalizacion-web.firebaseapp.com",
+  databaseURL: "https://fisicalizacion-web-default-rtdb.firebaseio.com",
+  projectId: "fisicalizacion-web",
+  storageBucket: "fisicalizacion-web.firebasestorage.app",
+  messagingSenderId: "706447091836",
+  appId: "1:706447091836:web:86b14b1462a1cc4d5d81f9"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+document.getElementById("permit").onclick = async () => {
+  if (typeof DeviceOrientationEvent.requestPermission === "function") {
+    await DeviceOrientationEvent.requestPermission();
+  }
+};
+
+window.addEventListener("deviceorientation", ev => {
+  const roll = ev.gamma;        // -90 a 90
+  const t = Math.min(1, Math.max(0, (roll + 45) / 90)); // t en 0..1
+  set(ref(db, "fisicalizacion/t"), t);
+});
+</script>
+</body>
+</html>

@@ -1724,3 +1724,194 @@ export async function initChart() {
     );
   }
 }
+
+// --- Physicalization bridge ---
+const data = new Proxy([], {
+  get(target, prop) {
+    const source = chartData || [];
+    const value = source[prop];
+    return typeof value === 'function' ? value.bind(source) : value;
+  }
+});
+
+const xScale = (...args) => (scales && typeof scales.xScale === 'function' ? scales.xScale(...args) : undefined);
+
+// --- Physicalization API: control externo del tooltip ---
+export function updateVaccinationDetail(t) {
+    if (!data || data.length === 0) return;
+
+    t = Math.max(0, Math.min(1, t)); // clamp
+
+    const index = Math.floor(t * (data.length - 1));
+    const point = data[index];
+
+    const xPos = xScale(point.date);
+
+    updateInteractiveElements(
+        point.date,
+        point.deaths_7d,
+        point.vaccinated_pct,
+        xPos
+    );
+}
+
+function updateInteractiveElements(date, deathsValue, vaccinationPct, xPos) {
+  if (!chartGroup || !scales || !scales.yLeftScale || !scales.yRightScale || !chartSvg) return;
+  if (!tooltipElements.tooltip || !tooltipElements.guideline || !tooltipElements.circleDeaths || !tooltipElements.circleVaccination) return;
+  if (!date || typeof xPos !== 'number' || !isFinite(xPos)) return;
+
+  const config = {
+    width: CHART_CONFIG.width - CHART_CONFIG.margin.left - CHART_CONFIG.margin.right,
+    height: CHART_CONFIG.height - CHART_CONFIG.margin.top - CHART_CONFIG.margin.bottom
+  };
+
+  const matchedPoint = (chartData || []).find(d => d.date && d.date.getTime && date && date.getTime && d.date.getTime() === date.getTime()) ||
+    (date ? { date, deaths_7d: deathsValue, vaccinated_pct: vaccinationPct } : null);
+
+  if (!matchedPoint) {
+    ocultarTooltip();
+    return;
+  }
+
+  if (isSonificationPlaying()) {
+    ocultarTooltip();
+    return;
+  }
+
+  onHoverPoint(matchedPoint);
+
+  const xPosition = xPos;
+  const yDeaths = scales.yLeftScale(matchedPoint.deaths_7d);
+  const yVaccination = scales.yRightScale(matchedPoint.vaccinated_pct);
+
+  tooltipElements.guideline
+    .attr('x1', xPosition)
+    .attr('x2', xPosition)
+    .attr('y1', 0)
+    .attr('y2', config.height)
+    .style('opacity', 0.5);
+
+  const hasSelectedGroups = hasActiveAgeFilters();
+  const generalCircleOpacity = hasSelectedGroups ? 0.3 : 1;
+
+  tooltipElements.circleDeaths
+    .attr('cx', xPosition)
+    .attr('cy', yDeaths)
+    .style('opacity', generalCircleOpacity);
+
+  tooltipElements.circleVaccination
+    .attr('cx', xPosition)
+    .attr('cy', yVaccination)
+    .style('opacity', generalCircleOpacity);
+
+  chartGroup.selectAll('.tooltip-circle-group').remove();
+
+  AGE_GROUPS.forEach(group => {
+    if (filterState[group]) {
+      const color = COLORS.ageGroups[group];
+      const yDeathsGroup = scales.yLeftScale(matchedPoint[`deaths_${group}`] || 0);
+      chartGroup.append('circle')
+        .attr('class', 'tooltip-circle-group')
+        .attr('cx', xPosition)
+        .attr('cy', yDeathsGroup)
+        .attr('r', 4)
+        .style('fill', color)
+        .style('stroke', 'white')
+        .style('stroke-width', 2)
+        .style('opacity', 0.9)
+        .style('pointer-events', 'none');
+
+      const yVacGroup = scales.yRightScale(matchedPoint[`vaccinated_pct_${group}`] || 0);
+      chartGroup.append('circle')
+        .attr('class', 'tooltip-circle-group')
+        .attr('cx', xPosition)
+        .attr('cy', yVacGroup)
+        .attr('r', 4)
+        .style('fill', color)
+        .style('stroke', 'white')
+        .style('stroke-width', 2)
+        .style('opacity', 0.7)
+        .style('pointer-events', 'none');
+    }
+  });
+
+  const formatoFecha = d3.timeFormat('%d %b %Y');
+  const fechaFormateada = formatoFecha(matchedPoint.date);
+  const activeGroups = AGE_GROUPS.filter(g => filterState[g]);
+  const hasGroups = activeGroups.length > 0;
+
+  let tooltipHTML = `<div style="font-weight: 600; font-size: 11px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #e0e0e0;">${fechaFormateada}</div>`;
+
+  if (!hasGroups) {
+    tooltipHTML += `<table style="width: 100%; font-size: 11px; border-collapse: collapse;">`;
+    tooltipHTML += `<tr><td style="padding: 2px 0; color: #666;">Fallecidos:</td><td style="text-align: right; font-weight: 600;">${Math.round(matchedPoint.deaths_7d)}</td></tr>`;
+    tooltipHTML += `<tr><td style="padding: 2px 0; color: #666;">Vacunación:</td><td style="text-align: right; font-weight: 600;">${(matchedPoint.vaccinated_pct || 0).toFixed(1)}%</td></tr>`;
+    tooltipHTML += `</table>`;
+  } else {
+    tooltipHTML += `<table style="width: 100%; font-size: 10px; border-collapse: collapse; table-layout: fixed;">`;
+    tooltipHTML += `<thead><tr style="border-bottom: 1px solid #e0e0e0;">`;
+    tooltipHTML += `<th style="text-align: left; font-size: 9px; color: #999; font-weight: 500; padding: 0 0 2px 0; width: 50%;">Grupo</th>`;
+    tooltipHTML += `<th style="text-align: right; font-size: 9px; color: #999; font-weight: 500; padding: 0 4px 2px 0; width: 25%;">Fall.</th>`;
+    tooltipHTML += `<th style="text-align: right; font-size: 9px; color: #999; font-weight: 500; padding: 0 0 2px 0; width: 25%;">Vac.</th>`;
+    tooltipHTML += `</tr></thead>`;
+    tooltipHTML += `<tbody>`;
+
+    tooltipHTML += `<tr style="opacity: 0.5; border-bottom: 1px solid #f5f5f5;">`;
+    tooltipHTML += `<td style="padding: 3px 0; color: #666;">General</td>`;
+    tooltipHTML += `<td style="text-align: right; padding: 3px 4px 3px 0;">${Math.round(matchedPoint.deaths_7d)}</td>`;
+    tooltipHTML += `<td style="text-align: right; padding: 3px 0;">${(matchedPoint.vaccinated_pct || 0).toFixed(0)}%</td>`;
+    tooltipHTML += `</tr>`;
+
+    activeGroups.forEach(group => {
+      const deaths = Math.round(matchedPoint[`deaths_${group}`] || 0);
+      const vac = (matchedPoint[`vaccinated_pct_${group}`] || 0).toFixed(0);
+      const groupLabel = group === '<=39' ? '≤39' : group === '>=90' ? '≥90' : group;
+      const color = COLORS.ageGroups[group];
+
+      tooltipHTML += `<tr>`;
+      tooltipHTML += `<td style="padding: 3px 0;"><span style="color: ${color}; font-size: 12px;">●</span> ${groupLabel}</td>`;
+      tooltipHTML += `<td style="text-align: right; padding: 3px 4px 3px 0; font-weight: 600;">${deaths}</td>`;
+      tooltipHTML += `<td style="text-align: right; padding: 3px 0; font-weight: 600;">${vac}%</td>`;
+      tooltipHTML += `</tr>`;
+    });
+
+    tooltipHTML += `</tbody></table>`;
+  }
+
+  tooltipElements.tooltip.html(tooltipHTML);
+
+  const containerRect = document.getElementById('chart-container')?.getBoundingClientRect();
+  const svgRect = chartSvg.node()?.getBoundingClientRect();
+
+  if (!containerRect || !svgRect) {
+    tooltipElements.tooltip.style('display', 'none');
+    return;
+  }
+
+  const scaleX = svgRect.width / CHART_CONFIG.width;
+  const scaleY = svgRect.height / CHART_CONFIG.height;
+  const baseY = Number.isFinite(yDeaths) ? yDeaths : config.height / 2;
+
+  const pageX = svgRect.left + (CHART_CONFIG.margin.left + xPosition) * scaleX;
+  const pageY = svgRect.top + (CHART_CONFIG.margin.top + baseY) * scaleY;
+
+  const tooltipNode = tooltipElements.tooltip.node();
+  const tooltipWidth = tooltipNode.offsetWidth;
+  const tooltipHeight = tooltipNode.offsetHeight;
+
+  let tooltipX = pageX - containerRect.left + 15;
+  let tooltipY = pageY - containerRect.top - tooltipHeight - 10;
+
+  if (tooltipX + tooltipWidth > containerRect.width) {
+    tooltipX = pageX - containerRect.left - tooltipWidth - 15;
+  }
+
+  if (tooltipY < 0) {
+    tooltipY = pageY - containerRect.top + 20;
+  }
+
+  tooltipElements.tooltip
+    .style('display', 'block')
+    .style('left', tooltipX + 'px')
+    .style('top', tooltipY + 'px');
+}
