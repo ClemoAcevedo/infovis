@@ -1,4 +1,5 @@
 let injectionSynth = null;
+let hissSynth = null;
 let lastValue = null;
 let toneReady = false;
 let toneStartRequested = false;
@@ -58,6 +59,19 @@ export function initPhysicalVaccinationSound() {
         // Soft clinical-level volume
         injectionSynth.volume.value = -18;
     }
+
+    if (!hissSynth) {
+        hissSynth = new tone.NoiseSynth({
+            noise: { type: "white" },
+            envelope: {
+                attack: 0.001,
+                decay: 0.08,
+                sustain: 0.0,
+                release: 0.04
+            }
+        }).toDestination();
+        hissSynth.volume.value = -24;
+    }
 }
 
 // Triggered by updateVaccinationDetail(t)
@@ -69,8 +83,6 @@ export function physicalVaccinationSonify(t, narrativeActive = false) {
     if (!ensureToneReady()) return;
     initPhysicalVaccinationSound();
 
-    // Avoid spamming: trigger only on meaningful change
-    if (lastValue !== null && Math.abs(t - lastValue) < 0.015) return;
     lastValue = t;
 
     const tone = getTone();
@@ -80,7 +92,13 @@ export function physicalVaccinationSonify(t, narrativeActive = false) {
     // Think: sterile, clinical rising pitch
     const midi = 40 + t * 30; // low=40 (E2), high=70 (Bb4)
     const freq = tone.Frequency(midi, "midi").toFrequency();
+    const velocity = 0.35 + 0.6 * t; // subtle louder pulses as coverage rises
 
     // A tiny “dose-like” pulse
-    injectionSynth.triggerAttackRelease(freq, 0.12);
+    injectionSynth.triggerAttackRelease(freq, 0.16, undefined, velocity);
+
+    // Add a soft hiss to evoke injection flow
+    if (hissSynth) {
+        hissSynth.triggerAttackRelease(0.06);
+    }
 }
