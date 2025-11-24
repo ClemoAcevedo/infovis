@@ -139,5 +139,14 @@ new QRCode(document.getElementById("qr-control"), {
   height: 100%;
 }
 </style>
+<script>
+(function ensureQrTarget() {
+  const qrTarget = "https://clemoacevedo.github.io/infovis/sensor.html";
+  const qrEl = document.getElementById("qr-control");
+  if (!qrEl || typeof QRCode === "undefined") return;
+  qrEl.innerHTML = "";
+  new QRCode(qrEl, { text: qrTarget, width: 128, height: 128 });
+})();
+</script>
 </body>
 </html>
