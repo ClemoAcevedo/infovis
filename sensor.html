@@ -34,8 +34,9 @@ document.getElementById("permit").onclick = async () => {
 };
 
 window.addEventListener("deviceorientation", ev => {
-  const roll = ev.gamma;        // -90 a 90
-  const t = Math.min(1, Math.max(0, (roll + 45) / 90)); // t en 0..1
+  const roll = ev.gamma || 0;        // -90 a 90 (gamma = inclinación lateral)
+  const tiltRange = 60;              // Ángulo objetivo para alcanzar valor máximo
+  const t = Math.min(1, Math.max(0, roll / tiltRange)); // flat=0, inclinación→1
   set(ref(db, "fisicalizacion/t"), t);
 });
 </script>
