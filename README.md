@@ -263,3 +263,15 @@ El resultado es una narrativa **significativamente enriquecida** que combina:
 ### English summary (short)
 
 This project visualises the inverse relationship between COVID-19 deaths and vaccination coverage in Chile (2020–2023). It offers zoom/pan, an age-group comparison dropdown, contextual annotations, and a heartbeat-inspired sonification. A narrative mode zooms into the pandemic onset, plays the full story, highlights contextual notes, and restores the default view once playback stops. Data is preprocessed into `assets/data_age_groups.csv`; run `python process_age_data.py` to refresh it.
+
+---
+
+## Physicalization (tilt-to-tooltip) & Remote Control
+
+- **sensor.html** (root): mobile page that sends a normalized tilt parameter `t∈[0,1]` via Firebase Realtime Database (`fisicalizacion/t`). Flat phone ≈ `t=0`; tilt toward ~60° ≈ `t=1`.
+- **index.html**: listens to Firebase updates and calls `updateVaccinationDetail(t)`. Includes a fixed QR (top-left) pointing to `https://clemoacevedo.github.io/infovis/sensor.html` for quick pairing.
+- **assets/js/chart.js**: appended `updateVaccinationDetail(t)` hook to drive the existing tooltip/guide line/markers without altering mouse interactions, filters, zoom, or sound flows.
+
+## Physical Sonification (tilt-driven)
+
+- **assets/js/physical-sound.js**: compact Tone.js-based cue triggered by `updateVaccinationDetail(t)`; uses a soft filtered triangle MonoSynth (pillowy “dose” beep), no hiss, volume-safe. Autogates until the user interacts (browser autoplay policy). Narrative audio remains untouched.
