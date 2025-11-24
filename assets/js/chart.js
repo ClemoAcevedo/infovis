@@ -1753,6 +1753,13 @@ export function updateVaccinationDetail(t) {
         point.vaccinated_pct,
         xPos
     );
+
+    // If the narrative sonification system has a flag, pass it here.
+    // If not, set narrativeActive = false.
+    const narrativeActive = false;
+
+    // Trigger physical vaccination sonification
+    physicalVaccinationSonify(t, narrativeActive);
 }
 
 function updateInteractiveElements(date, deathsValue, vaccinationPct, xPos) {
@@ -1915,3 +1922,5 @@ function updateInteractiveElements(date, deathsValue, vaccinationPct, xPos) {
     .style('left', tooltipX + 'px')
     .style('top', tooltipY + 'px');
 }
+
+import { physicalVaccinationSonify } from "./physical-sound.js";
