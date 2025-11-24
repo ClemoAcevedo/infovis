@@ -102,3 +102,98 @@ export function physicalVaccinationSonify(t, narrativeActive = false) {
         hissSynth.triggerAttackRelease(0.06);
     }
 }
+
+// --- Gentle voicing override (append-only) ---
+// Keeps the feel but makes it softer/cleaner; also mutes the hiss if present.
+function softenPhysicalVaccinationSoundDesign() {
+    const tone = getTone();
+    if (!tone) return;
+
+    if (injectionSynth) {
+        injectionSynth.oscillator.type = "triangle";
+        injectionSynth.envelope.attack = 0.002;
+        injectionSynth.envelope.decay = 0.06;
+        injectionSynth.envelope.sustain = 0.0;
+        injectionSynth.envelope.release = 0.05;
+        injectionSynth.volume.value = -28; // softer overall
+    }
+
+    if (hissSynth) {
+        hissSynth.volume.value = -48; // near silent hiss
+        hissSynth.triggerAttackRelease = () => {}; // disable hiss bursts
+    }
+}
+
+let __softenInterval = null;
+if (typeof window !== 'undefined') {
+    const startSoftening = () => {
+        if (__softenInterval) return;
+        __softenInterval = window.setInterval(() => {
+            softenPhysicalVaccinationSoundDesign();
+            // Once the synth exists and is softened, stop checking frequently
+            if (injectionSynth) {
+                window.clearInterval(__softenInterval);
+                __softenInterval = null;
+            }
+        }, 250);
+    };
+
+    if (document.readyState === 'complete') {
+        startSoftening();
+    } else {
+        window.addEventListener('DOMContentLoaded', startSoftening, { once: true });
+    }
+}
+
+// --- Pleasant revoicing (append-only) ---
+// Revoice the physical cue to a softer, pillowy beep without hiss.
+let pleasantInjectionSynth = null;
+
+function getPleasantInjectionSynth() {
+    const tone = getTone();
+    if (!tone) return null;
+
+    if (!pleasantInjectionSynth) {
+        pleasantInjectionSynth = new tone.MonoSynth({
+            oscillator: { type: "triangle" },
+            filter: { type: "lowpass", frequency: 1400, Q: 0.6 },
+            envelope: { attack: 0.002, decay: 0.12, sustain: 0.0, release: 0.08 },
+            filterEnvelope: {
+                attack: 0.001,
+                decay: 0.1,
+                sustain: 0.0,
+                release: 0.08,
+                baseFrequency: 800,
+                octaves: 1.8
+            }
+        }).toDestination();
+        pleasantInjectionSynth.volume.value = -22;
+    }
+
+    return pleasantInjectionSynth;
+}
+
+const __originalPhysicalVaccinationSonify = physicalVaccinationSonify;
+
+physicalVaccinationSonify = function pleasantPhysicalVaccinationSonify(t, narrativeActive = false) {
+    if (narrativeActive) return;
+    if (!ensureToneReady()) return;
+
+    const tone = getTone();
+    const synth = getPleasantInjectionSynth();
+    if (!tone || !synth) return;
+
+    lastValue = t;
+
+    const freq = 520 + t * 420; // ~520 Hz (low) to ~940 Hz (high)
+    const velocity = 0.22 + 0.45 * t;
+    const now = tone.now();
+
+    synth.triggerAttackRelease(freq, 0.12, now, velocity);
+
+    if (hissSynth) {
+        hissSynth.volume.value = -72;
+    }
+
+    injectionSynth = synth; // steer upstream references to the pleasant voice
+};
