@@ -92,17 +92,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
 import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
 import { updateVaccinationDetail } from "./assets/js/chart.js";
-
-// --- Firebase Config del usuario ---
-const firebaseConfig = {
-  apiKey: "AIzaSyCmYBbVb9DvxYVrJtXxPNITGhpJvy50bbE",
-  authDomain: "fisicalizacion-web.firebaseapp.com",
-  databaseURL: "https://fisicalizacion-web-default-rtdb.firebaseio.com",
-  projectId: "fisicalizacion-web",
-  storageBucket: "fisicalizacion-web.firebasestorage.app",
-  messagingSenderId: "706447091836",
-  appId: "1:706447091836:web:86b14b1462a1cc4d5d81f9"
-};
+import { firebaseConfig } from "./assets/js/firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
